@@ -1,28 +1,8 @@
 # Solid Stream Aggregator
 
-`The aggregator is in active continuous development and will be changed frequently.`
-
-The Solid Stream Aggregator provides an aggregated view over streaming data stored in single or multiple solid pods.
-The Solid Stream Aggregator aggregates and stores the view in a solid pod and therefore reduces the overhead of querying multiple solid pods to build the specific view.
-The aggregated view is beneficial for applications such as for continuous monitoring.
-
-## Usage
-
-### Prerequisites
-
-- Solid Pod(s) with streaming data stored with [LDES in LDP](https://woutslabbinck.github.io/LDESinLDP/) specification.
-
-### Installation
-
-```
-- npm install
-```
-
-To start the aggregator, run the following command:
-
-```
-- npm run start aggregation
-```
+The repository (will) contain evaluation scripts and evaluation results for the Solid Stream Aggregator.
+The Solid Stream Aggregator is a service that runs on top of the [Solid](https://solidproject.org/) ecosystem and aggregates streams of data from different sources (i.e pods)
+to maintain a continuous view of the data.
 
 ## License
 
