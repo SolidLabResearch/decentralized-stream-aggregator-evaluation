@@ -1,8 +1,6 @@
-# Solid Stream Aggregator
+# Solid Stream Aggregator Evaluation
 
-The repository (will) contain evaluation scripts and evaluation results for the Solid Stream Aggregator.
-The Solid Stream Aggregator is a service that runs on top of the [Solid](https://solidproject.org/) ecosystem and aggregates streams of data from different sources (i.e pods)
-to maintain a continuous view of the data.
+This repository contains the code for the evaluation of the Solid Stream Aggregator.
 
 ## License
 
