@@ -38,6 +38,8 @@ export class WebSocketHandler {
             const event_quad_array = parser.parse(aggregation_event.aggregation_event);
             this.aggregation_resource_list.push(event_quad_array);
             if (this.aggregation_resource_list.length == this.aggregation_resource_list_batch_size) {
+                console.log(`Publishing aggregation events.`);
+                
                 aggregation_publisher.publish(this.aggregation_resource_list, aggregation_event.aggregation_window_from, aggregation_event.aggregation_window_to);
                 this.aggregation_resource_list = [];
             }

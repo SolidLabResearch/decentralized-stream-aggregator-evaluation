@@ -8,13 +8,14 @@ const parser = new RSPQLParser();
 const linkTraversalEngine = new QueryEngine();
 
 export class AggregatorInstantiator {
-    public latestMinutes: number;
     public currentTime: any;
     public solidServerURL: string;
     public query: string;
     public logger: Logger<ILogObj>;
     public stream_name: string;
     public session: any;
+    public from : Date;
+    public to : Date;
 
     /**
      * Creates an instance of AggregatorInstantiator.
@@ -23,14 +24,15 @@ export class AggregatorInstantiator {
      * @param {string} serverURL
      * @memberof AggregatorInstantiator
      */
-    constructor(continuousQuery: string, latestMinutes: number, serverURL: string) {
-        this.latestMinutes = latestMinutes;
+    constructor(continuousQuery: string, serverURL: string, from_timestamp: number, to_timestamp: number) {
         this.currentTime = new Date();
         this.solidServerURL = serverURL;
         this.query = continuousQuery;
         this.logger = new Logger();
+        this.from = new Date(from_timestamp);
+        this.to = new Date(to_timestamp);        
         this.stream_name = parser.parse(this.query).s2r[0].stream_name;
-        this.instantiateAggregator(this.stream_name).then(() => {
+        this.instantiateAggregator(this.stream_name, this.from, this.to).then(() => {
             this.logger.info(`Aggregator for ${this.stream_name} started`);
         });
     }
@@ -45,7 +47,7 @@ export class AggregatorInstantiator {
         }
         `);
         if (has_matches) {
-            await this.instantiateAggregator(stream_name);
+            await this.instantiateAggregator(stream_name, this.from, this.to);
         }
         else {
             this.logger.error(`The stream ${stream_name} doesn't point to an LDES Event Stream`);
@@ -59,7 +61,7 @@ export class AggregatorInstantiator {
      * @param {string} query
      * @memberof AggregatorInstantiator
      */
-    async instantiateAggregator(stream_name: string) {
+    async instantiateAggregator(stream_name: string, from_timestamp: Date, to_timestamp: Date) {
         // this.session = await getAuthenticatedSession({
         //     webId: authentication_object.web_id,
         //     password: authentication_object.password,
@@ -70,7 +72,7 @@ export class AggregatorInstantiator {
          * The following line is for testing purposes only for historical data.
          */
         // new SinglePodAggregator(stream_name, this.query, 'ws://localhost:8080/', "2022-11-07T09:27:17.5890", "2024-11-07T09:27:17.5890", this.latestMinutes, this.session);
-        new SinglePodAggregator(stream_name, this.query, 'ws://localhost:8080', "2023-02-13T09:27:29.5460", "2023-02-13T09:37:29.5460", this.latestMinutes, this.session);
+        new SinglePodAggregator(stream_name, this.query, 'ws://localhost:8080', from_timestamp, to_timestamp, this.session);        
     }
 
 }

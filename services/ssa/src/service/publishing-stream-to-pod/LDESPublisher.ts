@@ -10,6 +10,8 @@ import {
     VersionAwareLDESinLDP,
     ILDES,
     getAuthenticatedSession,
+    LILConfig,
+    VLILConfig
 } from "@treecg/versionawareldesinldp";
 import { QueryAnnotationPublishing } from "./QueryAnnotationPublishing";
 import {
@@ -29,7 +31,7 @@ export class LDESPublisher {
     private lilURL: string = CONFIG.LIL_URL
     private prefixFile = CONFIG.PREFIX_FILE;
     private treePath = CONFIG.TREE_PATH;
-    public config: LDESConfig;
+    public config: VLILConfig;
     private amount = CONFIG.AMOUNT;
     private bucketSize = CONFIG.BUCKET_SIZE;
     private logLevel = CONFIG.LOG_LEVEL;
@@ -39,14 +41,14 @@ export class LDESPublisher {
     public logger: Logger<ILogObj>;
     public endpoint_queries: EndpointQueries;
 
-    constructor(latest_minutes_to_retrieve: number) {
+    constructor() {
         this.config = {
-            LDESinLDPIdentifier: this.lilURL, treePath: this.treePath, versionOfPath: "1.0",
+            treePath: this.treePath, versionOfPath : "1.0"
         }
         this.parser = new RSPQLParser();
         this.logger = new Logger();
         this.query_annotation_publisher = new QueryAnnotationPublishing();
-        this.endpoint_queries = new EndpointQueries(latest_minutes_to_retrieve);
+        this.endpoint_queries = new EndpointQueries();
         this.initialise();
     }
 
@@ -57,17 +59,19 @@ export class LDESPublisher {
             email: AGG_CONFIG.aggregation_pod_email,
         })
         const communication = new SolidCommunication(this.session);
-        const lil: ILDES = await new LDESinLDP(this.lilURL, communication);
+        const lil: ILDES = new LDESinLDP(this.lilURL, communication);
         let metadata: LDESMetadata | undefined;
-        const versionAware = new VersionAwareLDESinLDP(lil);
-        await versionAware.initialise(this.config);
+        // this.config.date = new Date(0);
+        // await lil.initialise(this.config);
+        const vlil: VersionAwareLDESinLDP = new VersionAwareLDESinLDP(lil)
+        await vlil.initialise(this.config)
         try {
             const metadataStore = await lil.readMetadata();
             const ldes = metadataStore.getSubjects(RDF.type, LDES.EventStream, null);
             if (ldes.length > 1) {
                 console.log(`More than one LDES is present. We are extracting the first one at, ${ldes[0].value}`);
             }
-            metadata = extractLdesMetadata(metadataStore, ldes[0].value);
+            // metadata = extractLdesMetadata(metadataStore, ldes[0].value);
 
         } catch (error) {
             console.log(error);
@@ -85,9 +89,9 @@ export class LDESPublisher {
             const config: LDESConfig = {
                 LDESinLDPIdentifier: this.lilURL, treePath: this.treePath, versionOfPath: "1.0",
             }
-            let query = this.endpoint_queries.get_query("averageHRPatient1")
+            let query = this.endpoint_queries.get_query("averageHRPatient1", start_time, end_time)
             if (query != undefined) {
-                this.query_annotation_publisher.publish(query, this.lilURL, resourceList, this.treePath, this.bucketSize, config, start_time, end_time, this.session);
+                this.query_annotation_publisher.publish(query, this.lilURL, resourceList, this.treePath, config, start_time, end_time, this.session);
             }
         }
 
