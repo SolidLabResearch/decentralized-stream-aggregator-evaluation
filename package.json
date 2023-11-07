@@ -1,0 +1,13 @@
+{
+  "dependencies": {
+    "@treecg/versionawareldesinldp": "^0.2.2",
+    "ldfetch": "^1.2.8",
+    "pidusage": "^3.0.2",
+    "rsp-js": "^1.1.2",
+    "ws": "^8.14.2"
+  },
+  "devDependencies": {
+    "@types/pidusage": "^2.0.4",
+    "@types/ws": "^8.5.8"
+  }
+}
