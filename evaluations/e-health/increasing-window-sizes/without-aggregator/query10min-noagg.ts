@@ -1,10 +1,12 @@
 import { LDESinLDP, LDPCommunication } from "@treecg/versionawareldesinldp";
 import { QueryEngine } from "@comunica/query-sparql";
-import { epoch } from "../Util";
+import { add_event_to_rsp_engine, epoch } from "../Util";
+import { RDFStream, RSPEngine, RSPQLParser } from "rsp-js";
 const communication = new LDPCommunication();
 const query_engine = new QueryEngine();
 const N3 = require('n3');
-let ldes_location = 'http://http://n061-14a.wall2.ilabt.iminds.be:3000/participant6/bvp/';
+// let ldes_location = 'http://http://n061-14a.wall2.ilabt.iminds.be:3000/participant6/bvp/';
+let ldes_location = 'http://localhost:3000/dataset_participant1/data/';
 let query = `
 PREFIX saref: <https://saref.etsi.org/core/>
 PREFIX dahccsensors: <https://dahcc.idlab.ugent.be/Homelab/SensorsAndActuators/>
@@ -19,10 +21,19 @@ WHERE {
     }
 }
 `;
+const parser = new RSPQLParser();
+let stream_array: any[] = [];
+let rsp_engine = new RSPEngine(query);
+parser.parse(query).s2r.forEach((stream: any) => {
+    stream_array.push(stream.stream_name);
+});
+let emitter = rsp_engine.register();
+let stream_name = stream_array[0];
 let last_minute_window = 10;
 let end_time = new Date('2024-05-10T12:00:00.000Z');
-let new_time = new Date(end_time);
-new_time.setMinutes(end_time.getMinutes() - last_minute_window);
+let new_time = new Date('2021-05-10T12:00:00.000Z');
+// let new_time = new Date(end_time);
+// new_time.setMinutes(end_time.getMinutes() - last_minute_window);
 
 async function query10min() {
     let ldes = new LDESinLDP(ldes_location, communication);
@@ -42,20 +53,27 @@ async function query10min() {
             sources: [store]
         });
 
-        binding_stream.on('data', (binding: any) => {
+        binding_stream.on('data', async (binding: any) => {
             let time = binding.get('time');
             if (time !== undefined) {
                 let timestamp = await epoch(time.value);
-                console.log(`Timestamp: ${timestamp}`);
                 if (stream_name) {
-                    console.log(`Adding Event to ${stream_name}`);
-                    await this.add_event_to_rsp_engine(store, stream_name, timestamp);
+                    await add_event_to_rsp_engine(store, stream_name, timestamp);
                 }
                 else {
                     console.log(`The stream is undefined`);
-          
-
+                }
+            }
         });
+    })
 
+    stream.on('end', async () => {
+        console.log('Stream has ended');
     });
-}
+
+    emitter.on('data', async (data: any) => {
+        console.log(data);
+    });
+};
+
+query10min();
