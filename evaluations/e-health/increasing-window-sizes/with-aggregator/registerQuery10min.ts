@@ -15,6 +15,9 @@ WHERE {
         ?s saref:relatesToProperty dahccsensors:wearable.bvp .
     }
 }`;
+const startTime = Date.now();
+let received_messages = 0;
+
 const websocket = new WebSocket('ws://localhost:8080', 'solid-stream-aggregator-protocol', {
     perMessageDeflate: false
 });
@@ -78,5 +81,22 @@ websocket.on('message', (message) => {
     }
     // Handle query response
     let result = JSON.parse(message.toString());
+    received_messages++;
     console.log(result.aggregation_event);
 });
+
+
+async function measureThroughput() {
+    const currentTime = Date.now();
+    const elapsedTimeInSeconds = (currentTime - startTime) / 1000;
+    const quadThroughput = received_messages / elapsedTimeInSeconds;
+    console.log(`Quad Throughput: ${quadThroughput} quads per second`);
+  }
+  
+  // Start the measurement at specific intervals
+  const measurementInterval = setInterval(measureThroughput, 1000); 
+
+  console.log(measurementInterval);
+  measureThroughput();
+  clearInterval(measurementInterval);
+
