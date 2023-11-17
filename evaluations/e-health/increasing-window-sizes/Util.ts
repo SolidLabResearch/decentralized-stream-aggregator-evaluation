@@ -33,11 +33,14 @@ export async function epoch(date: string) {
     return Date.parse(date);
 }
 
-export async function add_event_to_rsp_engine(store: any, stream_name: RDFStream, timestamp: number) {
-    let quads = store.getQuads(null, null, null, null);
-    for (let quad of quads) {
-        stream_name.add(quad, timestamp);
-    }
+export async function add_event_to_rsp_engine(store: any, stream_name: RDFStream[], timestamp: number) {
+    stream_name.forEach((stream: RDFStream) => {
+        let quads = store.getQuads(null, null, null, null);
+        for (let quad of quads) {
+            console.log(typeof stream);
+            stream.add(quad, timestamp);
+        }
+    });
 }
 
 export async function find_aggregator_location(solid_pod_webid: string) {

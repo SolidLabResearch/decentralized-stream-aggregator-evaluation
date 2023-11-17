@@ -1,14 +1,14 @@
 import fs from "fs";
 import WebSocket from 'ws';
 import { record_usage } from '../Util';
-
+let ldes_location = 'http://localhost:3000/dataset_participant1/data/';
 const query =  `
-PRERIX saref: <https://saref.etsi.org/core/>
+PREFIX saref: <https://saref.etsi.org/core/>
 PREFIX dahccsensors: <https://dahcc.idlab.ugent.be/Homelab/SensorsAndActuators/>
 PREFIX : <https://rsp.js/>
 REGISTER RStream <output> AS
 SELECT (MAX(?o) as ?maxBVP)
-FROM NAMED WINDOW :w1 ON STREAM <http://localhost:3000/dataset_participant1/> [RANGE 600 STEP 20]
+FROM NAMED WINDOW :w1 ON STREAM <${ldes_location}> [RANGE 600 STEP 20]
 WHERE {
     WINDOW :w1 {
         ?s saref:hasValue ?o .
@@ -23,41 +23,22 @@ const websocket = new WebSocket('ws://localhost:8080', 'solid-stream-aggregator-
 });
 let first_message_arrival_time: number | null = null;
 let time_start = Date.now();
-console.log('query10min registered');
-// websocket.on('open', () => {
-//     let message_object = {
-//         query: `PREFIX saref: <https://saref.etsi.org/core/> 
-//         PREFIX dahccsensors: <https://dahcc.idlab.ugent.be/Homelab/SensorsAndActuators/>
-//         PREFIX : <https://rsp.js/>
-//         REGISTER RStream <output> AS
-//         SELECT (MAX(?o) as ?maxBVP)
-//         FROM NAMED WINDOW :w1 ON STREAM <http://http://n061-14a.wall2.ilabt.iminds.be:3000/participant6/bvp/> [RANGE 600 STEP 20]
-//         WHERE {
-//             WINDOW :w1 {
-//                 ?s saref:hasValue ?o .
-//                 ?s saref:relatesToProperty dahccsensors:wearable.bvp .
-//             }
-//         }`,
-//         queryId: 'query10min',
-//     };
-//     websocket.send(JSON.stringify(message_object));
-//     record_usage('query10min', 1000);
-// });
-
 websocket.on('open', () => {
     let message_object = {
-        query: `PREFIX saref: <https://saref.etsi.org/core/> 
-        PREFIX dahccsensors: <https://dahcc.idlab.ugent.be/Homelab/SensorsAndActuators/>
-        PREFIX : <https://rsp.js/>
-        REGISTER RStream <output> AS
-        SELECT (MAX(?o) as ?maxBVP)
-        FROM NAMED WINDOW :w1 ON STREAM <http://localhost:3000/dataset_participant1/data/> [RANGE 600 STEP 20]
-        WHERE {
-            WINDOW :w1 {
-                ?s saref:hasValue ?o .
-                ?s saref:relatesToProperty dahccsensors:wearable.bvp .
-            }
-        }`,
+        query: `
+        PREFIX saref: <https://saref.etsi.org/core/>
+PREFIX dahccsensors: <https://dahcc.idlab.ugent.be/Homelab/SensorsAndActuators/>
+PREFIX : <https://rsp.js/>
+REGISTER RStream <output> AS
+SELECT (MAX(?o) as ?maxBVP)
+FROM NAMED WINDOW :w1 ON STREAM <${ldes_location}> [RANGE 600 STEP 20]
+WHERE {
+    WINDOW :w1 {
+        ?s saref:hasValue ?o .
+        ?s saref:relatesToProperty dahccsensors:wearable.bvp .
+    }
+}
+        `,
         queryId: 'query10min',
     };
     websocket.send(JSON.stringify(message_object));
@@ -95,8 +76,6 @@ async function measureThroughput() {
   
   // Start the measurement at specific intervals
   const measurementInterval = setInterval(measureThroughput, 1000); 
-
-  console.log(measurementInterval);
   measureThroughput();
   clearInterval(measurementInterval);
 
