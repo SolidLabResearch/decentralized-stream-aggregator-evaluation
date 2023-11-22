@@ -31,7 +31,7 @@ websocket.on("message", (message) => {
     if (first_message_arrival_time === null) {
         first_message_arrival_time = Date.now();
         const query_latency = first_message_arrival_time - time_start;
-        fs.appendFileSync('query-latency.txt', query_latency + "\n");
+        fs.appendFileSync('query_latency.csv', query_latency + "\n");
     }
 
     // Handle query response
