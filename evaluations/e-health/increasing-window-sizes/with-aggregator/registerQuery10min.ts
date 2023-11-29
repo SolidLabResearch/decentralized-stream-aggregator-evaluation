@@ -1,7 +1,8 @@
 import fs from "fs";
 import WebSocket from 'ws';
 import { record_usage } from '../Util';
-let ldes_location = 'http://localhost:3000/dataset_participant1/data/';
+// let ldes_location = 'http://localhost:3000/dataset_participant1/bvp/';
+let ldes_location = 'http://n061-14a.wall2.ilabt.iminds.be:3000/participant6/bvp/';
 const query =  `
 PREFIX saref: <https://saref.etsi.org/core/>
 PREFIX dahccsensors: <https://dahcc.idlab.ugent.be/Homelab/SensorsAndActuators/>
@@ -12,7 +13,7 @@ FROM NAMED WINDOW :w1 ON STREAM <${ldes_location}> [RANGE 600 STEP 20]
 WHERE {
     WINDOW :w1 {
         ?s saref:hasValue ?o .
-        ?s saref:relatesToProperty dahccsensors:wearable.bvp .
+        ?s saref:relatesToProperty dahccsensors:org.dyamand.types.health.SpO2 .
     }
 }`;
 const startTime = Date.now();
@@ -47,6 +48,8 @@ WHERE {
 });
 
 websocket.on('message', (message) => {
+    console.log(message.toString());
+    
     if (first_message_arrival_time === null) {
         first_message_arrival_time = Date.now();
         const query_latency = first_message_arrival_time - time_start;
