@@ -23,6 +23,24 @@ export async function record(evaluation_name: string, query_function_id: string)
     });
 }
 
+export function insertion_sort(arr: string[]): string[] {
+    const len = arr.length;
+
+    for (let i = 1; i < len; i++) {
+        const current = arr[i];
+        let j = i - 1;
+
+        while (j >= 0 && arr[j] > current) {
+            arr[j + 1] = arr[j];
+            j--;
+        }
+
+        arr[j + 1] = current;
+    }
+
+    return arr;
+}
+
 export async function record_usage(evaluation_name: string, query_function_id: string, interval: number) {
     setInterval(() => {
         record(evaluation_name, query_function_id);

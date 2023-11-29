@@ -6,7 +6,7 @@ const comunica_engine = new QueryEngine();
 const N3 = require('n3');
 import fs from 'fs';
 let ldes_location = 'http://n061-14a.wall2.ilabt.iminds.be:3000/participant6/bvp/';
-export async function query60sec() {
+export async function query180sec() {
     let query_registered_time: number | null = null;
     let first_message_arrival_time: number | null = null;
     let file_streamer_done_time: number | null = null;
@@ -17,7 +17,7 @@ export async function query60sec() {
     PREFIX : <https://rsp.js/>
     REGISTER RStream <output> AS
     SELECT (MAX(?o) as ?maxBVP)
-    FROM NAMED WINDOW :w1 ON STREAM <${ldes_location}> [RANGE 60 STEP 10]
+    FROM NAMED WINDOW :w1 ON STREAM <${ldes_location}> [RANGE 180 STEP 10]
     WHERE {
         WINDOW :w1 {
             ?s saref:hasValue ?o .
@@ -34,7 +34,7 @@ export async function query60sec() {
     let has_been_written = false;
     let emitter = rsp_engine.register();
     let to_date = new Date(1700038652238);
-    let from_date = new Date(to_date.getTime() - 60);
+    let from_date = new Date(to_date.getTime() - 180);
     let ldes = new LDESinLDP(ldes_location, communication);
     const stream = await ldes.readMembersSorted({
         from: from_date,
@@ -100,7 +100,7 @@ export async function query60sec() {
     emitter.on('RStream', async (data: any) => {
         first_message_arrival_time = Date.now();
         if(query_registered_time !== null && file_streamer_done_time !== null && first_message_arrival_time !== null && !has_been_written) {
-            fs.appendFileSync('query_latency_noagg.csv', `60,${(file_streamer_done_time - query_registered_time)/1000},${(first_message_arrival_time - file_streamer_done_time)/1000}\n`);
+            fs.appendFileSync('query_latency_noagg.csv', `180,${(file_streamer_done_time - query_registered_time)/1000},${(first_message_arrival_time - file_streamer_done_time)/1000}\n`);
             has_been_written = true;
         }
     })
@@ -112,4 +112,4 @@ export async function query60sec() {
 
 
 
-query60sec();
+query180sec();
