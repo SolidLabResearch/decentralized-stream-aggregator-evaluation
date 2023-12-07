@@ -2,10 +2,15 @@
   "dependencies": {
     "@solid/community-server": "^7.0.1",
     "@treecg/versionawareldesinldp": "^0.2.2",
+    "@types/bunyan": "^1.8.11",
+    "bunyan": "^1.8.15",
     "dotenv": "^16.3.1",
     "ldfetch": "^1.2.8",
+    "log4js": "^6.9.1",
     "pidusage": "^3.0.2",
+    "rate-limited-ldp-communication": "^1.0.5",
     "rsp-js": "^1.1.2",
+    "winston": "^3.11.0",
     "ws": "^8.14.2"
   },
   "devDependencies": {
