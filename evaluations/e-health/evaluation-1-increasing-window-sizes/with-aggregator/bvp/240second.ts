@@ -54,6 +54,10 @@ async function twohundredfourtySecond() {
         websocket.send(JSON.stringify(message_object));
         record_usage('evaluation-1-increasing-window-sizes', 'querytwohundredfourtySecond-with-aggregator', 1000);
     });
+
+    websocket.on('message', (message: any) => {
+        console.log(message);
+    });
 }
 
 twohundredfourtySecond();

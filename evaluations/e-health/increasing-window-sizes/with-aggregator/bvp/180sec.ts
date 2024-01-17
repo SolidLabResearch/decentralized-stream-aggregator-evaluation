@@ -36,22 +36,22 @@ WHERE {
 
 websocket.on('message', (message: any) => {
     let parsed_message = JSON.parse(message);
-    let status = parsed_message.status;        
-    if (status === 'isomorphic_check_done'){
+    let status = parsed_message.status;
+    if (status === 'isomorphic_check_done') {
         isomorphism_done_time = Date.now();
     }
-    if (status === 'unique_query_registered'){
+    if (status === 'unique_query_registered') {
         query_registered_time = Date.now();
     }
-    if (status === 'stream_reader_ended'){
+    if (status === 'stream_reader_ended') {
         file_streamer_done_time = Date.now();
-    }    
+    }
     else if (parsed_message.aggregation_event) {
         console.log(parsed_message.aggregation_event);
         if (file_streamer_done_time !== null && rsp_processing_done_time === null && query_registered_time !== null && isomorphism_done_time !== null && query_sent_time !== null) {
             rsp_processing_done_time = Date.now();
-            fs.appendFileSync('query_latency.csv', `${180},${(isomorphism_done_time - query_sent_time)/1000},${(query_registered_time - isomorphism_done_time)/1000},${(file_streamer_done_time - query_registered_time)/1000},${(rsp_processing_done_time - file_streamer_done_time)/1000}\n`);
+            fs.appendFileSync('query_latency.csv', `${180},${(isomorphism_done_time - query_sent_time) / 1000},${(query_registered_time - isomorphism_done_time) / 1000},${(file_streamer_done_time - query_registered_time) / 1000},${(rsp_processing_done_time - file_streamer_done_time) / 1000}\n`);
         }
     }
-    
+
 });
