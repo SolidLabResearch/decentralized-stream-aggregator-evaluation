@@ -2,6 +2,7 @@ import fs from "fs";
 import WebSocket from 'ws';
 import { record_usage } from '../../Util';
 let ldes_location = 'http://n061-14a.wall2.ilabt.iminds.be:3000/participant6/bvp/';
+// let ldes_location = 'http://localhost:3000/dataset_participant1/xyz/';
 const websocket = new WebSocket('ws://localhost:8080', 'solid-stream-aggregator-protocol', {
 	perMessageDeflate: false
 });
@@ -27,8 +28,7 @@ websocket.on('open', () => {
 										        ?s saref:relatesToProperty dahccsensors:wearable.bvp .
 											    }
 					    }`, queryId: 'query1sec',
-	}
-
+	};
 	query_sent_time = Date.now();
 	websocket.send(JSON.stringify(message_object));
 	record_usage('increasing-window-sizes', 'query1sec-bvp-with-agg', 1000);
