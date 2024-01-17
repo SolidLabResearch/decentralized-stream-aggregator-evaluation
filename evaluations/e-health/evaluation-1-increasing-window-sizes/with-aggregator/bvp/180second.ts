@@ -56,7 +56,7 @@ async function hundredeightySecond() {
     });
 
     websocket.on('message', (message: any) => {
-        console.log(message);
+        console.log(message.toString());
     });
 }
 

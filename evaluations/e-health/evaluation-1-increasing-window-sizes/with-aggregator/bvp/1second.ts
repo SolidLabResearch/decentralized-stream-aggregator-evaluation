@@ -56,9 +56,9 @@ async function oneSecond() {
     });
 
     websocket.on('message', (message: any) => {
-        console.log(message);
+        console.log(message.toString());
     });
-    
+
 }
 
 oneSecond();
