@@ -1,0 +1,11 @@
+Message 1,Message 2,Time Difference (seconds)
+http_server_started,new_query_received_from_client_ws,63.529
+new_query_received_from_client_ws,isomorphic_check_done,0.025
+isomorphic_check_done,query_is_unique,0
+query_is_unique,stream_credentials_retrieved,0.007
+stream_credentials_retrieved,unique_query_registered,0.008
+unique_query_registered,file_streamer_started for http://n061-14a.wall2.ilabt.iminds.be:3000/participant6/bvp/,0.001
+file_streamer_started for http://n061-14a.wall2.ilabt.iminds.be:3000/participant6/bvp/,file_streamer_ended for http://n061-14a.wall2.ilabt.iminds.be:3000/participant6/bvp/,3.11
+file_streamer_ended for http://n061-14a.wall2.ilabt.iminds.be:3000/participant6/bvp/,event_added_to_rsp_engine for http://n061-14a.wall2.ilabt.iminds.be:3000/participant6/bvp/,0.056
+event_added_to_rsp_engine for http://n061-14a.wall2.ilabt.iminds.be:3000/participant6/bvp/,event_added_to_rsp_engine for http://n061-14a.wall2.ilabt.iminds.be:3000/participant6/bvp/,0.004
+event_added_to_rsp_engine for http://n061-14a.wall2.ilabt.iminds.be:3000/participant6/bvp/,aggregation_event_sent_to_client,0.037

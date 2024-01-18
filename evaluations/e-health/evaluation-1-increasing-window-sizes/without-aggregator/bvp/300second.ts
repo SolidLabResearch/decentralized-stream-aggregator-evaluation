@@ -26,7 +26,6 @@ export async function query1sec() {
     } 
     `;
     let stream_array: RDFStream[] = [];
-    let observation_array: any[] = [];
     let rsp_engine = new RSPEngine(query);
     query_registered_time = Date.now();
     let stream_name: RDFStream = rsp_engine.getStream(ldes_location) as RDFStream;
@@ -41,6 +40,14 @@ export async function query1sec() {
         until: to_date,
         chronological: true
     })
+    readTheStream(stream, file_streamer_done_time, stream_array);
+    readAggregatedStream(emitter, query_registered_time, file_streamer_done_time, first_message_arrival_time, has_been_written);
+
+}
+
+export async function readTheStream(stream: any, file_streamer_done_time: number | null = null, stream_array: RDFStream[]){
+    let stream_name = stream_array[0];
+    let observation_array: any[] = [];
     stream.on("data", async (data: any) => {
         let time_start = Date.now();
         let stream_store = new N3.Store(data.quads);
@@ -96,7 +103,10 @@ export async function query1sec() {
         console.log(`The stream has ended.`);
         file_streamer_done_time = Date.now();
     });
+}
 
+
+export async function readAggregatedStream(emitter: any, query_registered_time: number | null, file_streamer_done_time: number | null, first_message_arrival_time: number | null, has_been_written: boolean){
     emitter.on('RStream', async (data: any) => {
         first_message_arrival_time = Date.now();
         if(query_registered_time !== null && file_streamer_done_time !== null && first_message_arrival_time !== null && !has_been_written) {
@@ -104,12 +114,7 @@ export async function query1sec() {
             has_been_written = true;
         }
     })
-
-    stream.on("error", async (error: Error) => {
-        console.log(`The reading from the solid pod ldes stream has an error: ${error}`);
-    });
 }
-
 
 
 query1sec();
