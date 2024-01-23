@@ -1,4 +1,4 @@
-import { StreamProcessor } from "./StreamProcessor.ts";
+import { StreamProcessor } from "./StreamProcessor";
 
 let ldes_location = 'http://n061-14a.wall2.ilabt.iminds.be:3000/participant6/bvp/';
 let query = `
