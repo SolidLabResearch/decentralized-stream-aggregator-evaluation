@@ -2,6 +2,7 @@ import { RSPEngine, RDFStream } from "rsp-js";
 import { QueryEngine } from "@comunica/query-sparql";
 import { LDPCommunication, LDESinLDP, LDES } from "@treecg/versionawareldesinldp";
 const N3 = require('n3');
+import fs from 'fs';
 
 export class FileStreamer {
 
@@ -29,6 +30,7 @@ export class FileStreamer {
 
     public async initialize_file_streamer(): Promise<void> {
         this.ldes = new LDESinLDP(this.ldes_stream, this.communication);
+        let streamer_start = Date.now();
         const stream = await this.ldes.readMembersSorted({
             from: this.from_date,
             until: this.to_date,
@@ -82,6 +84,8 @@ export class FileStreamer {
         });
 
         stream.on('end', async () => {
+            let streamer_end = Date.now();
+            fs.appendFileSync('streamer.txt', `${(streamer_end - streamer_start)/1000}s\n`);
             console.log(`Decentralized File Streamer has ended.`);
         });
     }

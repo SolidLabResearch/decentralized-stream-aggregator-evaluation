@@ -37,7 +37,9 @@ export class StreamProcessor {
         this.rsp_emitter.on('RStream', async (object: any) => {
             let iterable = object.bindings.values();
             for (let item of iterable) {
-                console.log(`Value received: `, item.value);
+                if (item.value) {
+                    console.log(`Value is ${item.value}`);
+                }
             }
         });
     }
