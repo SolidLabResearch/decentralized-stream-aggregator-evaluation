@@ -25,20 +25,20 @@ export class StreamProcessor {
         this.start_streamer();
     }
 
-    public start_streamer() {
+    public async start_streamer() {
         for (const stream of this.stream_array) {
             new FileStreamer(stream, this.from_date, this.to_date, this.rsp_engine);
         }
-        this.execute_stream_processor();
+        await this.execute_stream_processor();
     }
 
-    public execute_stream_processor() {
-        console.log(`The stream processor has started.`);
+    public async execute_stream_processor() {
+        console.log(`Waiting for events from the RStream.`);
         this.rsp_emitter.on('RStream', async (object: any) => {
             let iterable = object.bindings.values();
             for (let item of iterable) {
                 console.log(`Value received: `, item.value);
             }
-        })
+        });
     }
 }
