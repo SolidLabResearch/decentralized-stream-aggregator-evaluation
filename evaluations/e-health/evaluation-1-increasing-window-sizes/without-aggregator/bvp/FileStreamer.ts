@@ -38,6 +38,8 @@ export class FileStreamer {
         });
 
         stream.on('data', async (data) => {
+            let events_came_in = Date.now();
+            fs.writeFileSync('events.txt', `${(events_came_in - streamer_start)/1000}s\n`);
             let stream_store = new N3.Store(data.quads);                        
             const binding_stream = await this.comunica_engine.queryBindings(`
             select ?s where {
@@ -54,8 +56,9 @@ export class FileStreamer {
                 };
             });
 
-            binding_stream.on('end', async () => {
+            binding_stream.on('end', async () => {                
                 let unique_observation_array = [...new Set(this.observation_array)];
+                console.log(`Observation array is sorted.`);
                 for (let observation of unique_observation_array) {
                     let observation_store = new N3.Store(stream_store.getQuads(observation, null, null, null));
                     if (observation_store.size > 0) {
@@ -70,8 +73,9 @@ export class FileStreamer {
 
                         timestamp_stream.on('data', async (bindings: any) => {
                             let time = bindings.get('time');
-
+                            console.log(time.value);
                             if (time !== undefined){
+                                console.log(`Timestamp is ${time.value}`);
                                 let timestamp = await epoch(time.value);
                                 if (this.stream_name){
                                     await add_event_to_rsp_engine(observation_store, [this.stream_name], timestamp);

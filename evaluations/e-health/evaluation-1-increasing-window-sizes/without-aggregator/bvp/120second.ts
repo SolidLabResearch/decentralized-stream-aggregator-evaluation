@@ -1,4 +1,6 @@
 import { StreamProcessor } from "./StreamProcessor";
+import { Instantiator } from "./Instantiator";
+import { LDESinLDP, LDPCommunication } from "@treecg/versionawareldesinldp";
 
 let ldes_location = 'http://n061-14a.wall2.ilabt.iminds.be:3000/participant6/bvp/';
 let query = `
@@ -16,11 +18,11 @@ let query = `
     }
 `;
 
-let to_date = new Date("2023-11-15T08:58:11.302Z");
+let to_date = new Date("2023-11-15T09:47:09.8120Z");
 let from_date = new Date(to_date.getTime() - 120000);
 
 async function main() {
-    new StreamProcessor(query, from_date, to_date);
+    new Instantiator(query, from_date, to_date);
 }
 
 main();

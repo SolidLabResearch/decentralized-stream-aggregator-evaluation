@@ -1,7 +1,8 @@
 import WebSocket from 'ws';
 import { find_stream_aggregator, find_relevant_streams, record_usage } from '../Util';
 import * as csv from 'csv-writer';
-let solid_pod_location = 'http://n061-14a.wall2.ilabt.iminds.be:3000/participant6/';
+// let solid_pod_location = 'http://n061-14a.wall2.ilabt.iminds.be:3000/participant6/bvp/';
+let solid_pod_location = 'fff';
 
 async function oneSecond() {
     let time_one = performance.now();
@@ -28,8 +29,9 @@ async function oneSecond() {
         { second: 1, operation: 'find_relevant_streams', time: (time_three - time_two) / 1000 },
     ]);
 
-    let stream = relevant_streams[0];
-    const websocket = new WebSocket('ws://localhost:8080', 'solid-stream-aggregator-protocol', {
+    // let stream = relevant_streams[0];
+    let stream = "http://n061-14a.wall2.ilabt.iminds.be:3000/participant6/bvp/";
+    const websocket = new WebSocket('ws://http://n061-20b.wall2.ilabt.iminds.be:8080', 'solid-stream-aggregator-protocol', {
         perMessageDeflate: false
     });
 
@@ -51,7 +53,18 @@ async function oneSecond() {
             `,
             queryId: 'queryOneSecond-with-aggregator'
         };
-        websocket.send(JSON.stringify(message_object));
+
+        /*
+        {
+  query: 'PREFIX saref: <https://saref.etsi.org/core/> PREFIX dahccsensors: <https://dahcc.idlab.ugent.be/Homelab/SensorsAndActuators/> PREFIX : <https://rsp.js/> REGISTER RStream <output> AS SELECT (MAX(?o) as ?maxBVP) FROM NAMED WINDOW :w1 ON STREAM <${ldes_location}> [RANGE 180 STEP 20] WHERE {     WINDOW :w1 {         ?s saref:hasValue ?o .         ?s saref:relatesToProperty dahccsensors:wearable.bvp .     } }',
+  queryId: 'query180sec'
+}
+
+        */
+
+console.log(message_object);
+
+        // websocket.send(JSON.stringify(message_object));
         record_usage('evaluation-1-increasing-window-sizes', 'queryOneSecond-with-aggregator', 1000);
     });
 

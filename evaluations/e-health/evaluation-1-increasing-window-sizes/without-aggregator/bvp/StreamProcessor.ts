@@ -18,10 +18,10 @@ export class StreamProcessor {
         this.stream_array = [];
         this.parser = new RSPQLParser();
         this.rsp_engine = new RSPEngine(query);
-        this.rsp_emitter = this.rsp_engine.register();
         this.parser.parse(this.query).s2r.forEach((stream) => {
             this.stream_array.push(stream.stream_name);
         });
+        this.rsp_emitter = this.rsp_engine.register();
         this.start_streamer();
     }
 
@@ -29,7 +29,7 @@ export class StreamProcessor {
         for (const stream of this.stream_array) {
             new FileStreamer(stream, this.from_date, this.to_date, this.rsp_engine);
         }
-        await this.execute_stream_processor();
+        this.execute_stream_processor();
     }
 
     public async execute_stream_processor() {
@@ -39,6 +39,7 @@ export class StreamProcessor {
             for (let item of iterable) {
                 if (item.value) {
                     console.log(`Value is ${item.value}`);
+                    process.exit(0);
                 }
             }
         });

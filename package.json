@@ -2,7 +2,9 @@
   "dependencies": {
     "@solid/community-server": "^7.0.1",
     "@treecg/versionawareldesinldp": "^0.2.2",
+    "@types/benchmark": "^2.1.5",
     "@types/bunyan": "^1.8.11",
+    "benchmark": "^2.1.4",
     "bunyan": "^1.8.15",
     "csv-writer": "^1.6.0",
     "dotenv": "^16.3.1",

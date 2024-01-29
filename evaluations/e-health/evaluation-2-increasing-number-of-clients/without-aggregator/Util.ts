@@ -10,6 +10,7 @@ import fs from 'fs';
 import pidusage from 'pidusage';
 const ldfetch = require('ldfetch');
 const fetch = new ldfetch({});
+let communication = new LDPCommunication();
 export async function create_non_aggregator_client(number_of_clients: number) {
     const client_promises = [];
     for (let client = 0; client < number_of_clients; client++) {
@@ -26,7 +27,7 @@ async function create_client() {
     PREFIX : <https://rsp.js/>
     REGISTER RStream <output> AS
     SELECT (MAX(?o) as ?maxBVP)
-    FROM NAMED WINDOW :w1 ON STREAM <${ldes_location}> [RANGE 6000 STEP 30]
+    FROM NAMED WINDOW :w1 ON STREAM <${ldes_location}> [RANGE 60 STEP 5]
     WHERE {
         WINDOW :w1 {
             ?s saref:hasValue ?o .
@@ -41,8 +42,8 @@ async function create_client() {
     let stream_name: RDFStream = rsp_engine.getStream(ldes_location) as RDFStream;
     stream_array.push(stream_name);
     let emitter = rsp_engine.register();
-    let to_date = new Date(1700038652238);
-    let from_date = new Date(to_date.getTime() - 6000);
+    let to_date = new Date("2023-11-15T08:58:11.302Z");
+    let from_date = new Date(to_date.getTime() - 60000);
     let ldes = new LDESinLDP(ldes_location, new LDPCommunication());
     const stream = await ldes.readMembersSorted({
         from: from_date,
@@ -101,6 +102,7 @@ async function create_client() {
 
     emitter.on('RStream', async (data: any) => {
         console.log(data);
+        process.exit();
     });
 }
 
