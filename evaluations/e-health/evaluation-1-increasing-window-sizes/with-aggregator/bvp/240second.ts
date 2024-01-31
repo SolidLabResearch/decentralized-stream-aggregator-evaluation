@@ -29,7 +29,7 @@ async function twohundredfourtySecond() {
     ]);
 
     let stream = relevant_streams[0];
-    const websocket = new WebSocket('ws://localhost:8080', 'solid-stream-aggregator-protocol', {
+    const websocket = new WebSocket('ws://n061-14a.wall2.ilabt.iminds.be:8080/', 'solid-stream-aggregator-protocol', {
         perMessageDeflate: false
     });
 

@@ -3,7 +3,7 @@ import WebSocket from 'ws';
 import { record_usage } from '../../Util';
 // let ldes_location = 'http://localhost:3000/dataset_participant1/xyz/';
 let ldes_location = 'http://n061-14a.wall2.ilabt.iminds.be:3000/participant6/';
-const websocket = new WebSocket('ws://localhost:8080', 'solid-stream-aggregator-protocol', {
+const websocket = new WebSocket('ws://n061-14a.wall2.ilabt.iminds.be:8080/', 'solid-stream-aggregator-protocol', {
     perMessageDeflate: false
 });
 

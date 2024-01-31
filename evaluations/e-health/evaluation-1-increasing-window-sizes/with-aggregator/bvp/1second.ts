@@ -31,7 +31,7 @@ async function oneSecond() {
 
     // let stream = relevant_streams[0];
     let stream = "http://n061-14a.wall2.ilabt.iminds.be:3000/participant6/bvp/";
-    const websocket = new WebSocket('ws://http://n061-20b.wall2.ilabt.iminds.be:8080', 'solid-stream-aggregator-protocol', {
+    const websocket = new WebSocket('ws://n061-14a.wall2.ilabt.iminds.be:8080//', 'solid-stream-aggregator-protocol', {
         perMessageDeflate: false
     });
 
@@ -64,7 +64,7 @@ async function oneSecond() {
 
 console.log(message_object);
 
-        // websocket.send(JSON.stringify(message_object));
+        websocket.send(JSON.stringify(message_object));
         record_usage('evaluation-1-increasing-window-sizes', 'queryOneSecond-with-aggregator', 1000);
     });
 

@@ -1,32 +1,40 @@
-import { LDESinLDP, LDPCommunication, filterRelation, MetadataParser } from "@treecg/versionawareldesinldp";
+import { LDESinLDP, LDPCommunication } from "@treecg/versionawareldesinldp";
+import { QueryEngine } from "@comunica/query-sparql";
+import { Store } from "n3";
 
 async function main() {
+    let query_engine = new QueryEngine();
     let ldes_location = "http://n061-14a.wall2.ilabt.iminds.be:3000/participant6/bvp/";
     let ldes = new LDESinLDP(ldes_location, new LDPCommunication());
-    let metadata_store = await ldes.readMetadata();
-    let metadata = MetadataParser.extractLDESinLDPMetadata(metadata_store);
-    // let from_date = new Date("2023-11-15T08:58:11.302Z");
-    // let to_date = new Date("2023-11-15T08:59:11.302Z");
-
-    let to_date = new Date("2023-11-15T08:59:11.302Z");
-    let from_date = new Date("2023-11-15T06:59:11.302Z")
-    // let from_date = new Date(to_date.getTime() - 60000 * 60);
     let counter = 0;
-    let relations = filterRelation(metadata, from_date, to_date)
-    
     let readable_stream = await ldes.readMembersSorted({
-        from: from_date,
-        until: to_date,
+        from: new Date("2023-11-15T09:45:09.8120Z"),
+        until: new Date("2023-11-15T09:49:09.8120Z"),
         chronological: true
     });
 
-    readable_stream.on('data', () => {
-        counter++;
-    })
 
-    readable_stream.on('end', () => {
-        console.log(`Number of resources queried: ${(counter) / 3840}`);
-    })
+    readable_stream.on('data', async (data) => {
+        let time_start: number;
+        counter++;
+        let store = new Store(data.quads);
+        const binding_stream = await query_engine.queryBindings(`
+        PREFIX saref: <https://saref.etsi.org/core/>
+        select ?time where {
+            ?s saref:hasTimestamp ?time .
+        }
+        `, {
+            sources: [store]
+        });
+
+        binding_stream.on('data', async (binding) => {
+            let time = binding.get('time');
+            if (time !== undefined) {
+                time_start = Date.parse(time.value);
+                console.log(time_start);
+            }
+        })
+    });
 }
 
 main();

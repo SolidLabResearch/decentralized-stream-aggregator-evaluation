@@ -2,6 +2,8 @@ import { RSPEngine, RSPQLParser } from "rsp-js";
 import { DecentralizedFileStreamer } from "./DecentralizedFileStreamer";
 import { v4 as uuidv4 } from 'uuid';
 import { EventEmitter, on } from "events";
+const WebSocketClient = require('websocket').client;
+const websocketConnection = require('websocket').connection;
 const parser = new RSPQLParser();
 
 export class Instantiator {
@@ -9,6 +11,8 @@ export class Instantiator {
     public rsp_engine: RSPEngine;
     public rsp_emitter: EventEmitter;
     public from_date: Date;
+    public client = new WebSocketClient();
+    static connection: typeof websocketConnection;
     public stream_array: string[];
     public to_date: Date;
     public constructor(query: string, from_timestamp: Date, to_timestamp: Date) {
@@ -19,8 +23,9 @@ export class Instantiator {
         this.stream_array = [];
         parser.parse(this.query).s2r.forEach((stream: { stream_name: string; }) => {
             this.stream_array.push(stream.stream_name);
-        });
+        });        
         this.rsp_emitter = this.rsp_engine.register();
+        this.connect_with_server('ws://localhost:3001');
         this.intiateDecentralizedFileStreamer();
     }
     public async intiateDecentralizedFileStreamer() {
@@ -28,25 +33,14 @@ export class Instantiator {
         for (const stream of this.stream_array) {
             new DecentralizedFileStreamer(stream, this.from_date, this.to_date, this.rsp_engine, this.query);
         }
-        this.executeRSP();
+        await this.executeRSP(this.rsp_emitter);
     }
 
-    public async executeRSP() {
-        console.log(`Executing RSP Engine for ${this.stream_array}`);
-
-        this.rsp_emitter.on('RStream', async (object: any) => {
-                let window_timestamp_from = object.timestamp_from;
-                console.log(object);
-                let window_timestamp_to = object.timestamp_to;
-                let iterable = object.bindings.values();
-                console.log(object.bindings.size);
-                for (let item of iterable) {
-                    let aggregation_event_timestamp = new Date().getTime();
-                    let data = item.value;
-                    console.log(`Value is ${data}`);   
-                    process.exit(0);                 
-                }
-
+    public async executeRSP(emitter: EventEmitter) {
+        console.log(`Waiting for events to be emitted from the RSP Engine for ${this.stream_array}`);
+        emitter.on('RStream', async (object: any) => {
+            Instantiator.sendToServer(object.aggregation_event);
+            process.exit(0);
         });
     }
 
@@ -74,6 +68,23 @@ export class Instantiator {
             return aggregation_event;
         }
     }
+    async connect_with_server(wssURL: string) {
+        this.client.connect(wssURL, 'solid-stream-aggregator-protocol');
+        this.client.on('connectFailed', (error: Error) => {
+            console.log('Connect Error: ' + error.toString());
+        });
+        this.client.setMaxListeners(Infinity);
+        this.client.on('connect', (connection: typeof websocketConnection) => {
+            Instantiator.connection = connection;
+        });
+    }
+
+    static sendToServer(message: string) {
+        if (this.connection.connected) {
+            this.connection.sendUTF(message);
+        }
+    }
+
 
 }
 
@@ -91,3 +102,5 @@ export type Credentials = {
         idp: string;
     };
 };
+
+

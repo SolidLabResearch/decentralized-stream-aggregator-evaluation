@@ -29,7 +29,7 @@ async function sixtySecond() {
     ]);
 
     let stream = relevant_streams[0];
-    const websocket = new WebSocket('ws://localhost:8080', 'solid-stream-aggregator-protocol', {
+    const websocket = new WebSocket('ws://n061-14a.wall2.ilabt.iminds.be:8080/', 'solid-stream-aggregator-protocol', {
         perMessageDeflate: false
     });
 
@@ -41,7 +41,7 @@ async function sixtySecond() {
             PREFIX : <https://rsp.js/>
             REGISTER RStream <output> AS
             SELECT (MAX(?o) as ?maxBVP)
-            FROM NAMED WINDOW :w1 ON STREAM <${stream}> [RANGE 60 STEP 10]
+            FROM NAMED WINDOW :w1 ON STREAM <${stream}> [RANGE 60 STEP 30]
             WHERE {
                 WINDOW :w1 {
                     ?s saref:hasValue ?o .

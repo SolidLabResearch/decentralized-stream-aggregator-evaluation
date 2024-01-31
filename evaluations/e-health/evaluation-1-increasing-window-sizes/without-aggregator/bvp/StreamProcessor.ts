@@ -39,7 +39,6 @@ export class StreamProcessor {
             for (let item of iterable) {
                 if (item.value) {
                     console.log(`Value is ${item.value}`);
-                    process.exit(0);
                 }
             }
         });

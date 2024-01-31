@@ -1,6 +1,6 @@
 import { RSPEngine, RDFStream } from "rsp-js";
 import { QueryEngine } from "@comunica/query-sparql";
-import { LDPCommunication, LDESinLDP, LDES } from "@treecg/versionawareldesinldp";
+import { LDPCommunication, LDESinLDP, LDES, storeToString } from "@treecg/versionawareldesinldp";
 const N3 = require('n3');
 import fs from 'fs';
 
@@ -38,65 +38,26 @@ export class FileStreamer {
         });
 
         stream.on('data', async (data) => {
-            let events_came_in = Date.now();
-            fs.writeFileSync('events.txt', `${(events_came_in - streamer_start)/1000}s\n`);
-            let stream_store = new N3.Store(data.quads);                        
-            const binding_stream = await this.comunica_engine.queryBindings(`
-            select ?s where {
-                ?s ?p ?o .
+            let store = new N3.Store(data.quads)
+            let store_string = storeToString(store);
+            const timestamp_regex = /"(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}.\d{4}Z)"/;
+            const match = store_string.match(timestamp_regex);
+            if (match && match[1]) {
+                let timestamp = Date.parse(match[1]);
+                await add_event_to_rsp_engine(store, [this.stream_name as RDFStream], timestamp);
             }
-            `, {
-                sources: [stream_store]
-            });
-
-            binding_stream.on('data', async (binding: any) => {
-                for (let subject of binding.values()) {
-                    this.observation_array.push(subject.id);
-                    this.observation_array = insertion_sort(this.observation_array);
-                };
-            });
-
-            binding_stream.on('end', async () => {                
-                let unique_observation_array = [...new Set(this.observation_array)];
-                console.log(`Observation array is sorted.`);
-                for (let observation of unique_observation_array) {
-                    let observation_store = new N3.Store(stream_store.getQuads(observation, null, null, null));
-                    if (observation_store.size > 0) {
-                        const timestamp_stream = await this.comunica_engine.queryBindings(`
-                        PREFIX saref: <https://saref.etsi.org/core/>
-                        SELECT ?time WHERE {
-                            <${observation}> saref:hasTimestamp ?time .
-                        }
-                        `, {
-                            sources: [observation_store]
-                        });
-
-                        timestamp_stream.on('data', async (bindings: any) => {
-                            let time = bindings.get('time');
-                            console.log(time.value);
-                            if (time !== undefined){
-                                console.log(`Timestamp is ${time.value}`);
-                                let timestamp = await epoch(time.value);
-                                if (this.stream_name){
-                                    await add_event_to_rsp_engine(observation_store, [this.stream_name], timestamp);
-                                }
-                            }
-                        })
-                    }
-                }
-            });
         });
 
         stream.on('end', async () => {
             let streamer_end = Date.now();
-            fs.appendFileSync('streamer.txt', `${(streamer_end - streamer_start)/1000}s\n`);
+            fs.appendFileSync('streamer.txt', `${(streamer_end - streamer_start) / 1000}s\n`);
             console.log(`Decentralized File Streamer has ended.`);
         });
     }
 }
 
-export async function add_event_to_rsp_engine(store:any, stream_name: RDFStream[], timestamp: number) {
-    stream_name.forEach((stream: RDFStream) => {
+export async function add_event_to_rsp_engine(store: any, stream_name: RDFStream[], timestamp: number) {
+    stream_name.forEach(async(stream: RDFStream) => {
         let quads = store.getQuads(null, null, null, null);
         for (let quad of quads) {
             stream.add(quad, timestamp);
@@ -104,8 +65,8 @@ export async function add_event_to_rsp_engine(store:any, stream_name: RDFStream[
     });
 }
 
-export function epoch(date: string){
-    return Date.parse(date); 
+export function epoch(date: string) {
+    return Date.parse(date);
 }
 
 export function insertion_sort(arr: string[]): string[] {

@@ -43,6 +43,7 @@ export class DecentralizedFileStreamer {
         const communication = this.communication;
         this.ldes = new LDESinLDP(this.ldes_stream, communication);
         this.file_streamer_start_time = Date.now();
+        let counter = 0;
         const stream = await this.ldes.readMembersSorted({
             from: this.from_date,
             until: this.to_date,
@@ -52,45 +53,24 @@ export class DecentralizedFileStreamer {
         stream.on("data", async (data: any) => {
             let stream_store = new Store(data.quads);
             const binding_stream = await this.comunica_engine.queryBindings(`
-            select ?s where {
-                ?s ?p ?o .
+            PREFIX saref: <https://saref.etsi.org/core/>
+            select ?time where {
+                ?s saref:hasTimestamp ?time .
             }`, {
                 sources: [stream_store]
             });
 
-            binding_stream.on('data', async (binding: any) => {
-                for (let subject of binding.values()) {
-                    this.observation_array.push(subject.id);
-                    this.observation_array = insertion_sort(this.observation_array);
+            binding_stream.on('data', (binding: any) => {
+                let time = binding.get('time');
+                if (time !== undefined) {
+                    let timestamp = this.epoch(time.value);
+                    if (this.stream_name) {
+                        this.add_event_to_rsp_engine(stream_store, [this.stream_name], timestamp);
+                    }
                 }
             });
 
             binding_stream.on('end', async () => {
-                let unique_observation_array = [...new Set(this.observation_array)];
-                for (let observation of unique_observation_array) {
-                    let observation_store = new Store(stream_store.getQuads(observation, null, null, null));
-                    if (observation_store.size > 0) {
-                        const timestamp_stream = await this.comunica_engine.queryBindings(`
-                        PREFIX saref: <https://saref.etsi.org/core/>
-                        SELECT ?time WHERE {
-                            <${observation}> saref:hasTimestamp ?time .
-                        }
-                        `, {
-                            sources: [observation_store]
-                        });
-
-                        timestamp_stream.on('data', async (bindings: Bindings) => {
-                            let time = bindings.get('time');
-                            if (time !== undefined) {
-                                let timestamp = await this.epoch(time.value);
-                                if (this.stream_name) {
-                                    await this.add_event_to_rsp_engine(observation_store, [this.stream_name], timestamp);
-                                }
-                            }
-                        });
-                    }
-                }
-
             });
         });
 
@@ -120,7 +100,7 @@ export class DecentralizedFileStreamer {
                 console.log(`Timestamp: ${timestamp}`);
                 if (stream_name) {
                     console.log(`Adding Event to ${stream_name}`);
-                    await this.add_event_to_rsp_engine(store, stream_name, timestamp);
+                    this.add_event_to_rsp_engine(store, stream_name, timestamp);
                 }
                 else {
                     console.log(`The stream is undefined`);
@@ -132,7 +112,7 @@ export class DecentralizedFileStreamer {
         });
     }
 
-    async add_event_to_rsp_engine(store: typeof Store, stream_name: RDFStream[], timestamp: number) {
+    add_event_to_rsp_engine(store: typeof Store, stream_name: RDFStream[], timestamp: number) {
         stream_name.forEach((stream: RDFStream) => {
             let quads = store.getQuads(null, null, null, null);
             for (let quad of quads) {
@@ -141,7 +121,7 @@ export class DecentralizedFileStreamer {
         });
     }
 
-    async epoch(date: string) {
+    epoch(date: string) {
         return Date.parse(date);
     }
 

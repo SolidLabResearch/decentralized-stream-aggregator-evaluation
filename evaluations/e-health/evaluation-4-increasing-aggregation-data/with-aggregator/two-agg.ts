@@ -1,6 +1,6 @@
 import WebSocket from "ws";
 
-const ws = new WebSocket("ws://localhost:8080", "solid-stream-aggregator-protocol", {
+const ws = new WebSocket("ws://n061-14a.wall2.ilabt.iminds.be:8080/", "solid-stream-aggregator-protocol", {
     perMessageDeflate: false
 });
 
