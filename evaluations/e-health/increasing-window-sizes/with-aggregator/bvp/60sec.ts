@@ -2,7 +2,7 @@ import fs from "fs";
 import WebSocket from 'ws';
 import { record_usage } from '../../Util';
 let ldes_location = 'http://n061-14a.wall2.ilabt.iminds.be:3000/participant6/bvp/';
-const websocket = new WebSocket('ws://n061-14a.wall2.ilabt.iminds.be:8080/', 'solid-stream-aggregator-protocol', {
+const websocket = new WebSocket('ws://n061-20b.wall2.ilabt.iminds.be:8080/', 'solid-stream-aggregator-protocol', {
     perMessageDeflate: false
 });
 
