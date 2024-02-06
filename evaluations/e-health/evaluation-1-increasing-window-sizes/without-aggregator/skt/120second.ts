@@ -17,7 +17,8 @@ let query = `
     }
 `;
 
-let to_date = new Date("2024-02-01T18:19:02.8460Z");
+let to_date = new Date("2024-02-01T17:54:03.025Z");
+
 let from_date = new Date(to_date.getTime() - 120000);
 
 async function main() {
