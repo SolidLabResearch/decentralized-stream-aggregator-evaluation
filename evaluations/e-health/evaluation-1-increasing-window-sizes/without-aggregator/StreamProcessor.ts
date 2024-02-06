@@ -27,6 +27,7 @@ export class StreamProcessor {
 
     public async start_streamer() {
         for (const stream of this.stream_array) {
+            console.log(`Starting the FileStreamer for ${stream}`);
             new FileStreamer(stream, this.from_date, this.to_date, this.rsp_engine);
         }
         this.execute_stream_processor();

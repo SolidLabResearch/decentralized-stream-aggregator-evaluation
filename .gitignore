@@ -2,3 +2,4 @@ pods/data/
 pods/.internal
 node_modules
 dist/
+logs/

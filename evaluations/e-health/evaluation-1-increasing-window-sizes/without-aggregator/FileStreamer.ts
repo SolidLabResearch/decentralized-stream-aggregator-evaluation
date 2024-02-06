@@ -30,6 +30,8 @@ export class FileStreamer {
 
     public async initialize_file_streamer(): Promise<void> {
         this.ldes = new LDESinLDP(this.ldes_stream, this.communication);
+        let metadata = await this.ldes.readMetadata();
+        let bucket_strategy = metadata.getQuads(this.ldes_stream + "#BucketizeStrategy", "https://w3id.org/tree#path", null, null)[0].object.value;        
         let streamer_start = Date.now();
         const stream = await this.ldes.readMembersSorted({
             from: this.from_date,
@@ -39,13 +41,9 @@ export class FileStreamer {
 
         stream.on('data', async (data) => {
             let store = new N3.Store(data.quads)
-            let store_string = storeToString(store);
-            const timestamp_regex = /"(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}.\d{4}Z)"/;
-            const match = store_string.match(timestamp_regex);
-            if (match && match[1]) {
-                let timestamp = Date.parse(match[1]);
-                await add_event_to_rsp_engine(store, [this.stream_name as RDFStream], timestamp);
-            }
+            let timestamp = store.getQuads(null, bucket_strategy, null, null)[0].object.value;
+            let timestamp_epoch = Date.parse(timestamp);
+            await add_event_to_rsp_engine(store, [this.stream_name as RDFStream], timestamp_epoch);
         });
 
         stream.on('end', async () => {
@@ -59,7 +57,7 @@ export class FileStreamer {
 export async function add_event_to_rsp_engine(store: any, stream_name: RDFStream[], timestamp: number) {
     stream_name.forEach(async(stream: RDFStream) => {
         let quads = store.getQuads(null, null, null, null);
-        for (let quad of quads) {
+        for (let quad of quads) {            
             stream.add(quad, timestamp);
         }
     });

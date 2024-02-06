@@ -8,7 +8,7 @@ const ldfetch = new ld_fetch({});
 import { Quad } from "n3";
 import WebSocket from 'ws';
 import { RateLimitedLDPCommunication } from "rate-limited-ldp-communication";
-import { insertion_sort } from "./FileStreamer";
+import { insertion_sort } from "../FileStreamer";
 
 export class DecentralizedFileStreamer {
     public ldes_stream: string;

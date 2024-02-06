@@ -1,7 +1,7 @@
 import * as fs from 'fs';
 
 // Read the CSV file
-const csvFilePath = 'logs/evaluation-1/with-aggregator-bvp/csv/300second.csv';
+const csvFilePath = 'logs/evaluation-1/with-aggregator-bvp/csv/120second.csv';
 const csvContent = fs.readFileSync(csvFilePath, 'utf-8');
 
 // Parse the CSV content into rows
@@ -34,7 +34,7 @@ for (const row of rows) {
 const newCsvContent = Array.from(cumulativeTimes.entries()).map(([key, value]) => `${key},${value}`).join('\n');
 
 // Write the content to a new CSV file
-const newCsvFilePath = 'logs/evaluation-1/with-aggregator-bvp/csv/new-file/300second.csv';
+const newCsvFilePath = 'logs/evaluation-1/with-aggregator-bvp/csv/new-file/120second.csv';
 fs.writeFileSync(newCsvFilePath, newCsvContent, 'utf-8');
 
 console.log(`Cumulative times written to ${newCsvFilePath}`);

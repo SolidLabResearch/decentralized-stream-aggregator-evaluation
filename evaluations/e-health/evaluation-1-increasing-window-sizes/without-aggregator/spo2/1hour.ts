@@ -1,23 +1,24 @@
 import { StreamProcessor } from "../StreamProcessor";
 
-let ldes_location = 'http://n061-14a.wall2.ilabt.iminds.be:3000/participant6/bvp/';
+let ldes_location   = "http://n061-14a.wall2.ilabt.iminds.be:3000/participant6/spo2/";
+
 let query = `
     PREFIX saref: <https://saref.etsi.org/core/>
     PREFIX dahccsensors: <https://dahcc.idlab.ugent.be/Homelab/SensorsAndActuators/>
     PREFIX : <https://rsp.js/>
     REGISTER RStream <output> AS
-    SELECT (MAX(?o) as ?maxBVP)
-    FROM NAMED WINDOW :w1 ON STREAM <${ldes_location}> [RANGE 300000 STEP 30000]
+    SELECT (MIN(?o) as ?minSPO2)
+    FROM NAMED WINDOW :w1 ON STREAM <${ldes_location}> [RANGE 3600000 STEP 60000]
     WHERE {
         WINDOW :w1 {
             ?s saref:hasValue ?o .
-            ?s saref:relatesToProperty dahccsensors:wearable.bvp .
+            ?s saref:relatesToProperty dahccsensors:org.dyamand.types.health.SpO2 .
         }   
     }
 `;
 
-let to_date = new Date("2023-11-15T09:47:09.8120Z");
-let from_date = new Date(to_date.getTime() - 300000);
+let to_date = new Date("2023-11-24T10:24:05.000Z");
+let from_date = new Date(to_date.getTime() - 3600000);
 
 async function main() {
     new StreamProcessor(query, from_date, to_date);

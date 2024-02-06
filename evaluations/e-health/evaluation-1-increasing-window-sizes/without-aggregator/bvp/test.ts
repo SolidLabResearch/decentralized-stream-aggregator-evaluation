@@ -1,5 +1,5 @@
 import { RSPQLParser } from "rsp-js";
-import { StreamProcessor } from "./StreamProcessor";
+import { StreamProcessor } from "../StreamProcessor";
 
 let parser = new RSPQLParser();
 

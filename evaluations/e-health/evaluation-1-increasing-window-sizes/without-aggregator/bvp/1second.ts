@@ -1,4 +1,4 @@
-import { StreamProcessor } from "./StreamProcessor";
+import { StreamProcessor } from "../StreamProcessor";
 
 let ldes_location = 'http://n061-14a.wall2.ilabt.iminds.be:3000/participant6/bvp/';
 let query = `
@@ -7,7 +7,7 @@ let query = `
     PREFIX : <https://rsp.js/>
     REGISTER RStream <output> AS
     SELECT (MAX(?o) as ?maxBVP)
-    FROM NAMED WINDOW :w1 ON STREAM <${ldes_location}> [RANGE 1 STEP 1]
+    FROM NAMED WINDOW :w1 ON STREAM <${ldes_location}> [RANGE 1000 STEP 100]
     WHERE {
         WINDOW :w1 {
             ?s saref:hasValue ?o .
