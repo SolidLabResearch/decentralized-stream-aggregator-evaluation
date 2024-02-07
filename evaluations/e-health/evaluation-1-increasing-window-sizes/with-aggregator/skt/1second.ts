@@ -44,8 +44,8 @@ async function queryOneSecond() {
             FROM NAMED WINDOW :w1 ON STREAM <${stream}> [RANGE 1000 STEP 100]
             WHERE {
                 WINDOW :w1 {
-                    ?s sared:hasValue ?o .
-                    ?s sared:relatesToProperty dahccsensors:wearable.skt .
+                    ?s saref:hasValue ?o .
+                    ?s saref:relatesToProperty dahccsensors:wearable.skt .
                 }
             }
             `,

@@ -13,6 +13,7 @@ export class FileStreamer {
     public comunica_engine: QueryEngine;
     public ldes!: LDESinLDP;
     public communication: LDPCommunication;
+    private time_to_add_events = 0;
     private observation_array: any[];
 
     constructor(ldes_stream: string, from_date: Date, to_date: Date, rspEngine: RSPEngine) {
@@ -43,11 +44,16 @@ export class FileStreamer {
             let store = new N3.Store(data.quads)
             let timestamp = store.getQuads(null, bucket_strategy, null, null)[0].object.value;
             let timestamp_epoch = Date.parse(timestamp);
+            let time_start = performance.now();
             await add_event_to_rsp_engine(store, [this.stream_name as RDFStream], timestamp_epoch);
+            let time_end = performance.now();
+            let time_taken = time_end - time_start;
+            this.time_to_add_events = this.time_to_add_events + time_taken;
+            fs.appendFileSync('events.txt', `${time_taken/1000}\n`);            
         });
-
         stream.on('end', async () => {
             let streamer_end = Date.now();
+            console.log(`Time to add events to the RSP-Engine: ${this.time_to_add_events / 1000}s`);
             fs.appendFileSync('streamer.txt', `${(streamer_end - streamer_start) / 1000}s\n`);
             console.log(`Decentralized File Streamer has ended.`);
         });
