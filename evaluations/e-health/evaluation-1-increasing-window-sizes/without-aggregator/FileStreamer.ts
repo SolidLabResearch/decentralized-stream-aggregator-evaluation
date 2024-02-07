@@ -39,18 +39,18 @@ export class FileStreamer {
             chronological: true
         });
         const reader_end = Date.now();
-        fs.appendFileSync(`noagg-${this.window_width}.csv`, `Reader,${(reader_end - reader_start) / 1000}s\n`);
+        fs.appendFileSync(`noagg-${this.window_width}.csv`, `Reader,${(reader_end - reader_start)}\n`);
         stream.on('data', async (data) => {
             let pre_process_event_start = Date.now();
             let store = new N3.Store(data.quads)
             let timestamp = store.getQuads(null, bucket_strategy, null, null)[0].object.value;
             let timestamp_epoch = Date.parse(timestamp);
             let pre_process_event_end = Date.now();
-            fs.appendFileSync(`noagg-${this.window_width}.csv`, `pre_process,${(pre_process_event_end - pre_process_event_start)}ms\n`);
+            fs.appendFileSync(`noagg-${this.window_width}.csv`, `pre_process,${(pre_process_event_end - pre_process_event_start)}\n`);
             let time_start = Date.now();
             await add_event_to_rsp_engine(store, [this.stream_name as RDFStream], timestamp_epoch).then(() => {
                 let time_end = Date.now();
-                fs.appendFileSync(`noagg-${this.window_width}.csv`, `add_event,${(time_end - time_start)}ms\n`);
+                fs.appendFileSync(`noagg-${this.window_width}.csv`, `add_event,${(time_end - time_start)}\n`);
             });
         });
         stream.on('end', async () => {

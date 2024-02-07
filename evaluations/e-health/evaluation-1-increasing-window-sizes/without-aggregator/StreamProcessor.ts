@@ -44,7 +44,7 @@ export class StreamProcessor {
         this.rsp_emitter.on('RStream', async (object: any) => {
             if (this.streamer_end_time === null) {
                 this.streamer_end_time = Date.now();
-                fs.appendFileSync(`noagg-${this.window_width}.csv`, `${this.window_width},${(this.streamer_end_time - this.streamer_start_time) / 1000}s\n\n`);
+                fs.appendFileSync(`noagg-${this.window_width}.csv`, `${this.window_width},${(this.streamer_end_time - this.streamer_start_time)}\n\n`);
             }
             let iterable = object.bindings.values();
             for (let item of iterable) {
