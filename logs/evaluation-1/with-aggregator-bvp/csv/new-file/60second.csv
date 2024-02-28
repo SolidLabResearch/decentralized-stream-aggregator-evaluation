@@ -1,11 +1,12 @@
 Message 1,Message 2,NaN
-http_server_started,new_query_received_from_client_ws,14.613
-new_query_received_from_client_ws,isomorphic_check_done,0.025
+http_server_started,new_query_received_from_client_ws,37.59
+new_query_received_from_client_ws,isomorphic_check_done,0.091
 isomorphic_check_done,query_is_unique,0
-query_is_unique,stream_credentials_retrieved,0.006
-stream_credentials_retrieved,unique_query_registered,0.009
-unique_query_registered,file_streamer_started for http://n061-14a.wall2.ilabt.iminds.be:3000/participant6/bvp/,0
-file_streamer_started for http://n061-14a.wall2.ilabt.iminds.be:3000/participant6/bvp/,file_streamer_ended for http://n061-14a.wall2.ilabt.iminds.be:3000/participant6/bvp/,NaN
-file_streamer_ended for http://n061-14a.wall2.ilabt.iminds.be:3000/participant6/bvp/,event_added_to_rsp_engine for http://n061-14a.wall2.ilabt.iminds.be:3000/participant6/bvp/,NaN
-event_added_to_rsp_engine for http://n061-14a.wall2.ilabt.iminds.be:3000/participant6/bvp/,event_added_to_rsp_engine for http://n061-14a.wall2.ilabt.iminds.be:3000/participant6/bvp/,9.941000000000157
-event_added_to_rsp_engine for http://n061-14a.wall2.ilabt.iminds.be:3000/participant6/bvp/,file_streamer_ended for http://n061-14a.wall2.ilabt.iminds.be:3000/participant6/bvp/,0.014
+query_is_unique,stream_credentials_retrieved,0.005
+stream_credentials_retrieved,unique_query_registered,0.006
+unique_query_registered,file_streamer_started for http://n061-14a.wall2.ilabt.iminds.be:3000/participant6/skt/,0.084
+file_streamer_started for http://n061-14a.wall2.ilabt.iminds.be:3000/participant6/skt/,file_streamer_ended for http://n061-14a.wall2.ilabt.iminds.be:3000/participant6/skt/,0.683
+file_streamer_ended for http://n061-14a.wall2.ilabt.iminds.be:3000/participant6/skt/,event_added_to_rsp_engine for http://n061-14a.wall2.ilabt.iminds.be:3000/participant6/skt/,0.095
+event_added_to_rsp_engine for http://n061-14a.wall2.ilabt.iminds.be:3000/participant6/skt/,event_added_to_rsp_engine for http://n061-14a.wall2.ilabt.iminds.be:3000/participant6/skt/,2.090999999999998
+event_added_to_rsp_engine for http://n061-14a.wall2.ilabt.iminds.be:3000/participant6/skt/,stream events have been fully read and added to the RSP Engine.,0.019
+stream events have been fully read and added to the RSP Engine.,aggregation_event_sent_to_client,1.686

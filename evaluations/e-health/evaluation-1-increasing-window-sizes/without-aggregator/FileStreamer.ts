@@ -11,21 +11,17 @@ export class FileStreamer {
     public stream_name: RDFStream | undefined;
     public ldes!: LDESinLDP;
     public communication: LDPCommunication;
-    private time_to_add_events = 0;
+    private rsp_engine: RSPEngine;
     public window_width: number;
-    private observation_array: any[];
 
     constructor(ldes_stream: string, from_date: Date, to_date: Date, rspEngine: RSPEngine, window_width: number) {
         this.ldes_stream = ldes_stream;
         this.from_date = from_date;
         this.to_date = to_date;
-        this.stream_name = rspEngine.getStream(ldes_stream) as RDFStream;
+        this.rsp_engine = rspEngine;
+        this.stream_name = this.rsp_engine.getStream(ldes_stream) as RDFStream;
         this.communication = new LDPCommunication();
-        this.observation_array = [];
         this.window_width = window_width;
-        this.initialize_file_streamer().then(() => {
-            console.log(`Reading from the solid pod is initialized.`);
-        });
     }
 
     public async initialize_file_streamer(): Promise<void> {
@@ -48,10 +44,9 @@ export class FileStreamer {
             let pre_process_event_end = Date.now();
             fs.appendFileSync(`noagg-${this.window_width}.csv`, `pre_process,${(pre_process_event_end - pre_process_event_start)}\n`);
             let time_start = Date.now();
-            await add_event_to_rsp_engine(store, [this.stream_name as RDFStream], timestamp_epoch).then(() => {
-                let time_end = Date.now();
-                fs.appendFileSync(`noagg-${this.window_width}.csv`, `add_event,${(time_end - time_start)}\n`);
-            });
+            add_event_to_rsp_engine(store, [this.stream_name as RDFStream], timestamp_epoch);
+            let time_end = Date.now();
+            fs.appendFileSync(`noagg-${this.window_width}.csv`, `add_event,${(time_end - time_start)}\n`);
         });
         stream.on('end', async () => {
             console.log(`Decentralized File Streamer has ended.`);
@@ -59,7 +54,7 @@ export class FileStreamer {
     }
 }
 
-export async function add_event_to_rsp_engine(store: any, stream_name: RDFStream[], timestamp: number) {
+export function add_event_to_rsp_engine(store: any, stream_name: RDFStream[], timestamp: number) {
     stream_name.forEach(async (stream: RDFStream) => {
         let quads = store.getQuads(null, null, null, null);
         for (let quad of quads) {
@@ -71,6 +66,7 @@ export async function add_event_to_rsp_engine(store: any, stream_name: RDFStream
 export function epoch(date: string) {
     return Date.parse(date);
 }
+
 
 export function insertion_sort(arr: string[]): string[] {
     const len = arr.length;

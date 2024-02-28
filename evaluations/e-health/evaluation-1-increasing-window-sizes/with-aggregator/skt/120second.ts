@@ -29,14 +29,14 @@ async function queryOneSecond() {
 
     // let stream = relevant_streams[0];
     let stream = "http://n061-14a.wall2.ilabt.iminds.be:3000/participant6/skt/";
-    const websocket = new WebSocket('ws://n061-20b.wall2.ilabt.iminds.be:8080//', 'solid-stream-aggregator-protocol', {
+    const websocket = new WebSocket('ws://n061-20b.wall2.ilabt.iminds.be:8080/', 'solid-stream-aggregator-protocol', {
         perMessageDeflate: false
     });
 
     websocket.once('open', () => {
         let message_object = {
             query: `
-            PREFIX sared: <https://saref.etsi.org/core/>
+            PREFIX saref: <https://saref.etsi.org/core/>
             PREFIX dahccsensors: <https://dahcc.idlab.ugent.be/Homelab/SensorsAndActuators/>
             PREFIX : <https://rsp.js/>
             REGISTER RStream <output> AS

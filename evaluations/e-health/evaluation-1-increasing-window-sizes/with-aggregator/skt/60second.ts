@@ -36,7 +36,7 @@ async function queryOneSecond() {
     websocket.once('open', () => {
         let message_object = {
             query: `
-            PREFIX sared: <https://saref.etsi.org/core/>
+            PREFIX saref: <https://saref.etsi.org/core/>
             PREFIX dahccsensors: <https://dahcc.idlab.ugent.be/Homelab/SensorsAndActuators/>
             PREFIX : <https://rsp.js/>
             REGISTER RStream <output> AS

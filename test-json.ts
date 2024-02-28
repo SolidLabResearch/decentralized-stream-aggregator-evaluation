@@ -1,42 +1,53 @@
-let message_object = {
-    query: `
-    PREFIX saref: <https://saref.etsi.org/core/> 
-    PREFIX dahccsensors: <https://dahcc.idlab.ugent.be/Homelab/SensorsAndActuators/>
-    PREFIX : <https://rsp.js/>
-    REGISTER RStream <output> AS
-    SELECT (MAX(?o) as ?maxBVP)
-    FROM NAMED WINDOW :w1 ON STREAM <http://> [RANGE 1 STEP 1]
-    WHERE {
-        WINDOW :w1 {
-            ?s saref:hasValue ?o .
-            ?s saref:relatesToProperty dahccsensors:wearable.bvp .
-        }
-    } 
-    `,
-    queryId: 'queryOneSecond-with-aggregator'
-};
+import axios from "axios";
 
-let message_object2 =         {
-    query: '\n + PREFIX saref: <https://saref.etsi.org/core/> PREFIX dahccsensors: <https://dahcc.idlab.ugent.be/Homelab/SensorsAndActuators/> PREFIX : <https://rsp.js/> REGISTER RStream <output> AS SELECT (MAX(?o) as ?maxBVP) FROM NAMED WINDOW :w1 ON STREAM <${ldes_location}> [RANGE 180 STEP 20] WHERE {     WINDOW :w1 {         ?s saref:hasValue ?o .         ?s saref:relatesToProperty dahccsensors:wearable.bvp .     } }',
-    queryId: 'query180sec'
+async function test_manas() {
+  let headersList = {
+    "Accept": "*/*",
+    "User-Agent": "Kush"
   }
 
-let message = {
-    query: `
-    PREFIX saref: <https://saref.etsi.org/core/>
-    PREFIX dahccsensors: <https://dahcc.idlab.ugent.be/Homelab/SensorsAndActuators/>
-    PREFIX : <https://rsp.js/>
-    REGISTER RStream <output> AS
-    SELECT (MAX(?o) as ?maxBVP)
-    FROM NAMED WINDOW :w1 ON STREAM <http://localhost:3000/> [RANGE 180 STEP 20]
-    WHERE {
-        WINDOW :w1 {
-            ?s saref:hasValue ?o .
-            ?s saref:relatesToProperty dahccsensors:wearable.bvp .
-        }
-    }
-    `,
-    queryId: 'query180sec'
+  let reqOptions = {
+    url: "http://10.2.32.126:3001/AGcNKtEIaGcuowME",
+    method: "GET",
+    headers: headersList,
+  }
+
+  let response = await axios.request(reqOptions);
+  if (response.status % 10 !== 0) {
+    console.log(response.status);
+  }
 }
 
-console.log(JSON.parse(JSON.stringify(message)));
+async function test_css() {
+  let headersList = {
+    "Accept": "*/*",
+    "User-Agent": "Kush"
+  }
+
+  let reqOptions = {
+    url: "http://n061-14a.wall2.ilabt.iminds.be:3000/participant6/skt/1706802232161/c8315abb-7c68-49f7-9709-0c05f099e99d",
+    method: "GET",
+    headers: headersList,
+  }
+
+  let response = await axios.request(reqOptions);
+  console.log(response.status);
+
+  if (response.status % 10 !== 0) {
+    console.log(`Error: `, response.status);
+  }
+}
+
+async function main() {
+  const time_start = Date.now();
+  const promises: Promise<void>[] = [];
+  for (let i = 0; i < 2000; i++) {
+    promises.push(test_css());
+  }
+  await Promise.all(promises);
+  const time_end = Date.now();
+  console.log(`Time taken: ${time_end - time_start}ms`);
+  console.log("Done");  
+}
+
+main();

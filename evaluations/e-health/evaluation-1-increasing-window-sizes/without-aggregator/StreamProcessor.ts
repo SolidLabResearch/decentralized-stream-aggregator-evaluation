@@ -1,4 +1,4 @@
-import { RDFStream, RSPQLParser, RSPEngine } from 'rsp-js';
+import { RSPQLParser, RSPEngine } from 'rsp-js';
 import { FileStreamer } from './FileStreamer';
 import { EventEmitter } from 'events';
 import fs from 'fs';

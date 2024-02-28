@@ -4,6 +4,7 @@
     "@treecg/versionawareldesinldp": "^0.3.0",
     "@types/benchmark": "^2.1.5",
     "@types/bunyan": "^1.8.11",
+    "axios": "^1.6.7",
     "benchmark": "^2.1.4",
     "bunyan": "^1.8.15",
     "csv-writer": "^1.6.0",
@@ -12,7 +13,7 @@
     "log4js": "^6.9.1",
     "pidusage": "^3.0.2",
     "rate-limited-ldp-communication": "^1.0.5",
-    "rsp-js": "^1.1.2",
+    "rsp-js": "/home/kush/Code/RSP-JS",
     "websocket": "^1.0.34",
     "winston": "^3.11.0",
     "ws": "^8.14.2"

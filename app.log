@@ -1,5 +1,0 @@
-{"name":"app","hostname":"pop-os","pid":60363,"level":50,"queryId":"query1","msg":"This is an error log","time":"2023-12-04T12:38:41.518Z","v":0}
-{"name":"app","hostname":"pop-os","pid":60433,"level":50,"queryId":"query1","msg":"This is an error log","time":"2023-12-04T12:38:56.338Z","v":0}
-{"name":"app","hostname":"pop-os","pid":60477,"level":50,"queryId":"query1","msg":"This is an error log","time":"2023-12-04T12:38:58.971Z","v":0}
-{"name":"app","hostname":"pop-os","pid":60547,"level":50,"queryId":"query1","msg":"This is an error log","time":"2023-12-04T12:39:15.348Z","v":0}
-{"name":"app","hostname":"pop-os","pid":60607,"level":50,"queryId":"query1","msg":"This is an error log","time":"2023-12-04T12:39:22.376Z","v":0}
