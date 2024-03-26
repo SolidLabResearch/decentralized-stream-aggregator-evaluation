@@ -1,0 +1,1 @@
+## Folder Structure of the Evaluation Repository.
