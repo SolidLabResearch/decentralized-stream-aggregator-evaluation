@@ -4,7 +4,8 @@ import * as fs from 'fs';
 import * as http from 'http';
 const N3 = require('n3');
 const parser = new N3.Parser();
-const ldes_location = "http://n061-14a.wall2.ilabt.iminds.be:3000/participant6/skt/";
+// const ldes_location = "http://n061-14a.wall2.ilabt.iminds.be:3000/participant6/skt/";
+const ldes_location = "http://localhost:3000/aggregation_pod/skt/";
 const query = `
 PREFIX saref: <https://saref.etsi.org/core/>
 PREFIX dahccsensors: <https://dahcc.idlab.ugent.be/Homelab/SensorsAndActuators/>
@@ -36,6 +37,7 @@ async function without_aggregator() {
     for (const stream of stream_array) {
         const stream_location = rsp_engine.getStream(stream) as RDFStream;
         subscribe_notifications(stream_location);
+        console.log(`Subscribed to notifications for stream ${stream}`);   
     }
     subscribe_to_results(rsp_emitter);
 }
@@ -47,7 +49,6 @@ async function setupServer(port: number, server: any) {
 }
 
 async function request_handler(request: http.IncomingMessage, response: http.ServerResponse) {
-    console.log(`Request received for the path: ${request.url}`);
     if (request.method === "POST") {
         let body = '';
         request.on('data', (chunk) => {
@@ -65,7 +66,7 @@ async function request_handler(request: http.IncomingMessage, response: http.Ser
                     if (error) {
                         console.error(`Error parsing the event data`, error)
                     }
-                    else {
+                    else if (quad) {
                         store.addQuad(quad);
                     }
                 });
@@ -198,6 +199,11 @@ export function subscribe_to_results(rsp_emitter: any) {
             fs.appendFileSync(`output-without-aggregator.txt`, `${timestamp},${item.value}\n`);
         }
     }
+    rsp_emitter.on('RStream', listener);
+    rsp_emitter.on('end', () => {
+        rsp_emitter.removeListener('RStream', listener);
+    });
 }
+
 
 without_aggregator()

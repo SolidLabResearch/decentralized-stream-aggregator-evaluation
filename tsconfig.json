@@ -15,5 +15,5 @@
   ]
 
   },
-  "include": ["src/evaluations"]
+  "include": ["src/**/*"],
 }
