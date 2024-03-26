@@ -68,13 +68,12 @@ async function request_handler(request: http.IncomingMessage, response: http.Ser
                     else {
                         store.addQuad(quad);
                     }
-                    const timestamp = store.getQuads(null, "https://saref.etsi.org/core/hasTimestamp", null, null)[0].object.value;
-                    const timestamp_epoch = Date.parse(timestamp);
-                    const stream = rsp_engine.getStream(ldes_location) as RDFStream;
-                    console.log(`Event received at ${published_time} with timestamp ${timestamp_epoch}`);
-                    add_event_to_rsp_engine(store, [stream], timestamp_epoch);
-
                 });
+                const timestamp = store.getQuads(null, "https://saref.etsi.org/core/hasTimestamp", null, null)[0].object.value;
+                const timestamp_epoch = Date.parse(timestamp);
+                const stream = rsp_engine.getStream(ldes_location) as RDFStream;
+                console.log(`Event received at ${published_time} with timestamp ${timestamp_epoch}`);
+                add_event_to_rsp_engine(store, [stream], timestamp_epoch);
                 response.writeHead(200, { "Content-Type": "text/plain" });
                 response.end("200 - OK");
             } catch (error) {
