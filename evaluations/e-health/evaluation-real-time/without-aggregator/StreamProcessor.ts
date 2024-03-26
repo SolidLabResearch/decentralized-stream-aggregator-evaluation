@@ -10,7 +10,7 @@ export class StreamProcessor {
     public stream_array: string[];
     public parser: RSPQLParser;
     public streamer_start_time: number = 0;
-    public streamer_end_time: number|null = null;
+    public streamer_end_time: number | null = null;
     public window_width: number;
     public rsp_engine: RSPEngine;
     public rsp_emitter: EventEmitter;
