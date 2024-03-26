@@ -1,3 +1,0 @@
-const base_query = `
-
-`
