@@ -2,9 +2,11 @@ import { WebSocket, EventEmitter } from "ws";
 import { RSPEngine, RSPQLParser, RDFStream } from "rsp-js";
 import { LDESinLDP, LDPCommunication } from "@treecg/versionawareldesinldp";
 import * as fs from 'fs';
+import { find_relevant_streams } from "./Util";
 const N3 = require('n3');
 const parser = new N3.Parser();
 const number_of_iterations = 33;
+const solid_pod_location = 'http://n061-14a.wall2.ilabt.iminds.be:3000/participant6/';
 const ldes_location = 'http://n061-14a.wall2.ilabt.iminds.be:3000/participant6/skt/';
 const query = `
 PREFIX saref: <https://saref.etsi.org/core/>
@@ -21,7 +23,16 @@ WHERE {
 }
 `;
 
+notification_stream_processor()
+
 async function notification_stream_processor() {
+    let start_find_ldes_stream = Date.now();
+    await find_relevant_streams(solid_pod_location, ["wearable.skt"]).then((streams) => {
+        if (streams) {
+            let end_find_ldes_stream = Date.now();
+            fs.appendFileSync(`with-notification-aggregator-log.csv`, `time_to_find_ldes_stream,${end_find_ldes_stream - start_find_ldes_stream}\n`);
+        }
+    });
     const rsp_engine = new RSPEngine(query);
     const rsp_parser = new RSPQLParser();
     const rsp_emitter = rsp_engine.register();
@@ -36,8 +47,10 @@ async function notification_stream_processor() {
         const bucket_strategy = metadata.getQuads(stream + "#BucketizeStrategy", "https://w3id.org/tree#path", null, null)[0].object.value;
         const stream_location = rsp_engine.getStream(stream) as RDFStream;
         subscribe_to_results(rsp_emitter, number_of_iterations);
+        const start_subscribe_notifications = Date.now();
         await subscribe_notifications(stream_location, bucket_strategy);
-
+        const end_subscribe_notifications = Date.now();
+        fs.appendFileSync(`with-notification-aggregator-log.csv`, `time_to_subscribe_notifications,${end_subscribe_notifications - start_subscribe_notifications}\n`);
     }
 
 }
@@ -55,6 +68,7 @@ async function subscribe_notifications(ldes_stream: RDFStream, bucket_strategy: 
     });
 
     websocket.on('message', async (data: any) => {
+        const time_before_preprocessing = Date.now();
         const received_data = JSON.parse(data);
         const stream_store = new N3.Store();
         const stream_event = received_data.event;
@@ -65,12 +79,13 @@ async function subscribe_notifications(ldes_stream: RDFStream, bucket_strategy: 
         });
         const timestamp = stream_store.getQuads(null, bucket_strategy, null, null)[0].object.value;
         const timestamp_epoch = Date.parse(timestamp);
+        const time_after_preprocessing = Date.now();
+        fs.appendFileSync(`with-notification-aggregator-log.csv`, `time_to_preprocess_event,${time_after_preprocessing - time_before_preprocessing}\n`);
         add_event_to_rsp_engine(stream_store, [ldes_stream], timestamp_epoch);
+        const time_after_adding_event = Date.now();
+        fs.appendFileSync(`with-notification-aggregator-log.csv`, `time_to_add_event_to_rsp_engine,${time_after_adding_event - time_after_preprocessing}\n`);
     });
 }
-
-notification_stream_processor()
-
 
 export function add_event_to_rsp_engine(store: any, stream_name: RDFStream[], timestamp: number) {
     stream_name.forEach(async (stream: RDFStream) => {

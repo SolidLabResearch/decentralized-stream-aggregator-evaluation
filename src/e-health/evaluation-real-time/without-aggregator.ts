@@ -215,6 +215,7 @@ export function subscribe_to_results(rsp_emitter: any, time_to_start_subscribing
             const time_recieved_aggregated_result = Date.now();
             fs.appendFileSync(`without-aggregator-log.csv`, `time_received_aggregation_event,${time_recieved_aggregated_result - time_to_start_subscribing_results}\n`);
             time_to_start_subscribing_results = time_recieved_aggregated_result;
+            fs.appendFileSync(`result.csv`, `${item.value}\n`);
         }
     }
     rsp_emitter.on('RStream', listener);
