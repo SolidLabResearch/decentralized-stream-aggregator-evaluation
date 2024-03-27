@@ -213,7 +213,7 @@ export function subscribe_to_results(rsp_emitter: any, time_to_start_subscribing
         let iterable = event.bindings.values();
         for (let item of iterable) {
             const time_recieved_aggregated_result = Date.now();
-            fs.appendFileSync('results.csv', `${time_recieved_aggregated_result},${item}`);
+            fs.appendFileSync('results.csv', `${time_recieved_aggregated_result},${item.get('?maxSKT')}\n`);
             fs.appendFileSync(`without-aggregator-log.csv`, `time_received_aggregation_event,${time_recieved_aggregated_result - time_to_start_subscribing_results}\n`);
             time_to_start_subscribing_results = time_recieved_aggregated_result;
         }
