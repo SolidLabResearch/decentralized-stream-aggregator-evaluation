@@ -46,7 +46,8 @@ async function notification_stream_processor() {
         const metadata = await ldes.readMetadata();
         const bucket_strategy = metadata.getQuads(stream + "#BucketizeStrategy", "https://w3id.org/tree#path", null, null)[0].object.value;
         const stream_location = rsp_engine.getStream(stream) as RDFStream;
-        subscribe_to_results(rsp_emitter, number_of_iterations);
+        const time_start_subscribing_results = Date.now();
+        subscribe_to_results(rsp_emitter, number_of_iterations, time_start_subscribing_results);
         const start_subscribe_notifications = Date.now();
         await subscribe_notifications(stream_location, bucket_strategy);
         const end_subscribe_notifications = Date.now();
@@ -96,11 +97,14 @@ export function add_event_to_rsp_engine(store: any, stream_name: RDFStream[], ti
     });
 }
 
-async function subscribe_to_results(rsp_emitter: any, i: number) {
+async function subscribe_to_results(rsp_emitter: any, i: number, time_start_subscribing_results: number) {
     const listener = (event: any) => {
         let iterable = event.bindings.values();
         for (let item of iterable) {
+            const time_received_aggregation_event = Date.now();
             const timestamp = Date.now();
+            fs.appendFileSync(`with-notification-aggregator-log.csv`, `time_received_aggregation_event,${time_received_aggregation_event - time_start_subscribing_results}\n`);
+            time_start_subscribing_results = time_received_aggregation_event;
             fs.appendFileSync(`output.txt`, `${timestamp},${item.value}\n`);
         }
     }
