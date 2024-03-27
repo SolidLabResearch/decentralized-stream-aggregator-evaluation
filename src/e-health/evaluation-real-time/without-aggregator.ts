@@ -4,8 +4,7 @@ import * as fs from 'fs';
 import * as http from 'http';
 const N3 = require('n3');
 const parser = new N3.Parser();
-// const ldes_location = "http://n061-14a.wall2.ilabt.iminds.be:3000/participant6/skt/";
-const ldes_location = "http://localhost:3000/aggregation_pod/skt/";
+const ldes_location = "http://n061-14a.wall2.ilabt.iminds.be:3000/participant6/skt/";
 const query = `
 PREFIX saref: <https://saref.etsi.org/core/>
 PREFIX dahccsensors: <https://dahcc.idlab.ugent.be/Homelab/SensorsAndActuators/>
