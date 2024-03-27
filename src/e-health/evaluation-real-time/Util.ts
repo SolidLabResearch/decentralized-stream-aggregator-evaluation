@@ -96,7 +96,7 @@ export async function if_exists_relevant_streams(solid_pod_url: string, interest
     }
 }
 
-export async function patch_request(solid_pod_url: string, aggregator_location: string) {
+export async function patch_aggregator_information(solid_pod_url: string, aggregator_location: string) {
     const store = new N3.Store();
     let profie_document = solid_pod_url + "/profile/card";
     store.addQuad(

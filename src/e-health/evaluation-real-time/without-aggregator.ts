@@ -2,8 +2,10 @@ import { RSPEngine, RSPQLParser, RDFStream } from "rsp-js";
 import axios from 'axios';
 import * as fs from 'fs';
 import * as http from 'http';
+import { find_relevant_streams } from "./Util";
 const N3 = require('n3');
 const parser = new N3.Parser();
+const solid_pod_location = "http://n061-14a.wall2.ilabt.iminds.be:3000/participant6/";
 const ldes_location = "http://n061-14a.wall2.ilabt.iminds.be:3000/participant6/skt/";
 const query = `
 PREFIX saref: <https://saref.etsi.org/core/>
@@ -27,18 +29,32 @@ const rsp_emitter = rsp_engine.register();
 const stream_array: string[] = []
 const parsed_query = rsp_parser.parse(query);
 
+without_aggregator();
 
 async function without_aggregator() {
+    const start_find_ldes_stream = Date.now();
+    await find_relevant_streams(solid_pod_location, ["wearable.skt"]).then((streams) => {
+        if (streams) {
+            const end_find_ldes_stream = Date.now();
+            fs.appendFileSync(`without-aggregator-log.csv`, `time_to_find_ldes_stream,${end_find_ldes_stream - start_find_ldes_stream}\n`);
+        }
+    });
     parsed_query.s2r.forEach((stream: any) => {
         stream_array.push(stream.stream_name);
     });
     setupServer(port, server);
     for (const stream of stream_array) {
         const stream_location = rsp_engine.getStream(stream) as RDFStream;
-        subscribe_notifications(stream_location);
-        console.log(`Subscribed to notifications for stream ${stream}`);   
+        const time_before_subscribing = Date.now();
+        const if_subscription_is_true = subscribe_notifications(stream_location);
+        if (if_subscription_is_true) {
+            const time_after_subscribing = Date.now();
+            fs.appendFileSync(`without-aggregator-log.csv`, `time_to_subscribe_notifications,${time_after_subscribing - time_before_subscribing}\n`);
+        }
+        console.log(`Subscribed to notifications for stream ${stream}`);
     }
-    subscribe_to_results(rsp_emitter);
+    let time_to_start_subscribing_results = Date.now();
+    subscribe_to_results(rsp_emitter, time_to_start_subscribing_results);
 }
 
 async function setupServer(port: number, server: any) {
@@ -55,8 +71,8 @@ async function request_handler(request: http.IncomingMessage, response: http.Ser
         });
         request.on('end', async () => {
             try {
+                const time_before_preprocessing = Date.now();
                 const notification = JSON.parse(body);
-                const published_time = (new Date(notification.published).getTime()).toString();
                 const resource_location = notification.object;
                 const response_fetch = await axios.get(resource_location);
                 const event_data = response_fetch.data;
@@ -72,8 +88,11 @@ async function request_handler(request: http.IncomingMessage, response: http.Ser
                 const timestamp = store.getQuads(null, "https://saref.etsi.org/core/hasTimestamp", null, null)[0].object.value;
                 const timestamp_epoch = Date.parse(timestamp);
                 const stream = rsp_engine.getStream(ldes_location) as RDFStream;
-                console.log(`Event received at ${published_time} with timestamp ${timestamp_epoch}`);
+                const time_after_preprocessing = Date.now();
+                fs.appendFileSync(`without-aggregator-log.csv`, `time_to_preprocess_event,${time_after_preprocessing - time_before_preprocessing}\n`);
                 add_event_to_rsp_engine(store, [stream], timestamp_epoch);
+                const time_after_adding_event = Date.now();
+                fs.appendFileSync(`without-aggregator-log.csv`, `time_to_add_event_to_rsp_engine,${time_after_adding_event - time_after_preprocessing}\n`);
                 response.writeHead(200, { "Content-Type": "text/plain" });
                 response.end("200 - OK");
             } catch (error) {
@@ -189,13 +208,13 @@ export function add_event_to_rsp_engine(store: any, stream_name: RDFStream[], ti
     });
 }
 
-export function subscribe_to_results(rsp_emitter: any) {
+export function subscribe_to_results(rsp_emitter: any, time_to_start_subscribing_results: number) {
     const listener = (event: any) => {
         let iterable = event.bindings.values();
         for (let item of iterable) {
-            const timestamp = Date.now();
-            console.log(`${timestamp},${item.value}`);
-            fs.appendFileSync(`output-without-aggregator.txt`, `${timestamp},${item.value}\n`);
+            const time_recieved_aggregated_result = Date.now();
+            fs.appendFileSync(`without-aggregator-log.csv`, `time_received_aggregation_event,${time_recieved_aggregated_result - time_to_start_subscribing_results}\n`);
+            time_to_start_subscribing_results = time_recieved_aggregated_result;
         }
     }
     rsp_emitter.on('RStream', listener);
@@ -203,6 +222,3 @@ export function subscribe_to_results(rsp_emitter: any) {
         rsp_emitter.removeListener('RStream', listener);
     });
 }
-
-
-without_aggregator()
