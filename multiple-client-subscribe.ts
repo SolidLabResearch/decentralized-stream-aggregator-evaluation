@@ -99,7 +99,7 @@ async function extract_subscription_server(resource: string) {
 }
 
 
-const clients = 500;
+const clients = 300;
 
 const stream_to_subscribe = new RDFStream("http://localhost:3000/aggregation_pod/skt/", new CSPARQLWindow("1000", 1000, 1000, 1000, 1000, 1000));
 (async function () {

@@ -31,7 +31,7 @@ const parsed_query = rsp_parser.parse(query);
 
 without_aggregator();
 
-async function without_aggregator() {
+export async function without_aggregator() {
     const start_find_ldes_stream = Date.now();
     await find_relevant_streams(solid_pod_location, ["wearable.skt"]).then((streams) => {
         if (streams) {

@@ -2,9 +2,10 @@ import { WebSocket } from 'ws';
 
 async function main() {
 
-    const stream = "http://n061-14a.wall2.ilabt.iminds.be:3000/participant6/skt/";
+    const stream = "http://n061-14a.wall2.ilabt.iminds.be:3000/participant6/";
+    const location_of_aggregator = "http://n061-20b.wall2.ilabt.iminds.be:8080/";
 
-    const websocket = new WebSocket('ws://n061-20b.wall2.ilabt.iminds.be:8080/', 'solid-stream-aggregator-protocol', {
+    const websocket = new WebSocket('ws://localhost:8080/', 'solid-stream-aggregator-protocol', {
         perMessageDeflate: false
     });
 
