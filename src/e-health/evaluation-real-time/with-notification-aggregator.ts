@@ -14,7 +14,7 @@ PREFIX dahccsensors: <https://dahcc.idlab.ugent.be/Homelab/SensorsAndActuators/>
 PREFIX : <https://rsp.js/>
 REGISTER RStream <output> AS
 SELECT (MAX(?o) as ?maxSKT)
-FROM NAMED WINDOW :w1 ON STREAM <${ldes_location}> [RANGE 120000 STEP 30000]
+FROM NAMED WINDOW :w1 ON STREAM <${ldes_location}> [RANGE 300000 STEP 60000]
 WHERE {
     WINDOW :w1 {
         ?s saref:hasValue ?o .
