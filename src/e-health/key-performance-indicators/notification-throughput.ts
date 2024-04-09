@@ -1,5 +1,6 @@
 // The file is used to calculate the throughput of the notification system with the Community Solid Server's WebHook2023 
 // notification system. The throughput is calculated by counting the number of notifications received by the server every second.
+// After testing : Yes the throughput from the notifications of the server is working as expected.
 import { EventEmitter } from 'events';
 import axios from 'axios';
 const N3 = require('n3');

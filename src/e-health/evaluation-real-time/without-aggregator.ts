@@ -2,6 +2,7 @@ import { RSPEngine, RSPQLParser, RDFStream } from "rsp-js";
 import axios from 'axios';
 import * as fs from 'fs';
 import * as http from 'http';
+import * as SETUP from '../../config/setup.json'
 import { find_relevant_streams } from "./Util";
 const N3 = require('n3');
 const parser = new N3.Parser();
@@ -115,7 +116,7 @@ async function subscribe_notifications(stream_location: RDFStream) {
             "@context": ["https://www.w3.org/ns/solid/notification/v1"],
             "type": "http://www.w3.org/ns/solid/notifications#WebhookChannel2023",
             "topic": inbox,
-            "sendTo": "http://localhost:8084",
+            "sendTo": `${SETUP.without_aggregator_http_server}`
         }
 
         const response = await axios.post(subscription_server.location, body, {
