@@ -46,12 +46,12 @@ async function notification_stream_processor() {
         const metadata = await ldes.readMetadata();
         const bucket_strategy = metadata.getQuads(stream + "#BucketizeStrategy", "https://w3id.org/tree#path", null, null)[0].object.value;
         const stream_location = rsp_engine.getStream(stream) as RDFStream;
-        const time_start_subscribing_results = Date.now();
-        subscribe_to_results(rsp_emitter, number_of_iterations, time_start_subscribing_results);
         const start_subscribe_notifications = Date.now();
         await subscribe_notifications(stream_location, bucket_strategy);
         const end_subscribe_notifications = Date.now();
         fs.appendFileSync(`with-notification-aggregator-log.csv`, `time_to_subscribe_notifications,${end_subscribe_notifications - start_subscribe_notifications}\n`);
+        const time_start_subscribing_results = Date.now();
+        subscribe_to_results(rsp_emitter, number_of_iterations, time_start_subscribing_results);
     }
 
 }
