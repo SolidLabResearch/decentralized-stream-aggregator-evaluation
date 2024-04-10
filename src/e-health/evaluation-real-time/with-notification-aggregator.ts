@@ -57,7 +57,7 @@ async function notification_stream_processor() {
 }
 
 async function subscribe_notifications(ldes_stream: RDFStream, bucket_strategy: string) {
-    const websocket = new WebSocket('ws://n061-14a.wall2.ilabt.iminds.be:8085//', 'solid-stream-notifications-aggregator', {
+    const websocket = new WebSocket('ws://localhost:8085//', 'solid-stream-notifications-aggregator', {
         perMessageDeflate: false
     });
     websocket.once('open', () => {
