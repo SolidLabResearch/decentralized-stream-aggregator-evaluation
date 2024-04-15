@@ -1,5 +1,5 @@
 import * as fs from 'fs';
-const file = fs.readFileSync('/home/kush/Code/RSP/evaluation-analysis/without-aggregator.csv', 'utf-8');
+const file = fs.readFileSync('/home/kush/Code/RSP/solid-stream-aggregator-evaluation/logs/csv/without-aggregator-1.csv', 'utf-8');
 const lines = file.split('\n');
 import { calculate_mean, calculate_standard_deviation, find_maximum, find_minimum, calculate_sum } from '../util/Util'
 const pre_preprocess_array: number[] = [];
@@ -33,17 +33,26 @@ lines.forEach((line) => {
         console.log(`The key ${key} is not recognized.`);
     }
 });
+console.log(calculate_mean(pre_preprocess_array));
+console.log(calculate_sum(pre_preprocess_array));
+console.log(calculate_standard_deviation(pre_preprocess_array));
+
+console.log(calculate_mean(add_event_to_rsp_engine_array));
+console.log(calculate_sum(add_event_to_rsp_engine_array));
+console.log(calculate_standard_deviation(add_event_to_rsp_engine_array));
 
 console.log(calculate_mean(received_aggregation_event_array));
 console.log(calculate_sum(received_aggregation_event_array));
-// console.log(calculate_standard_deviation(received_aggregation_event_array));
+console.log(calculate_standard_deviation(received_aggregation_event_array));
 
-// console.log(calculate_mean(pre_preprocess_array));
-// console.log(calculate_standard_deviation(pre_preprocess_array));
+// console.log(calculate_mean([199672, 212294]));
+// console.log(calculate_standard_deviation([212294, 199672]));
 
-// console.log(calculate_mean(add_event_to_rsp_engine_array));
-// console.log(calculate_standard_deviation(add_event_to_rsp_engine_array));
+// console.log(calculate_mean([220662, 207861]));
+// console.log(calculate_standard_deviation([220662, 207861]));
 
+// console.log(calculate_mean([333212, 333999]))
+// console.log(calculate_standard_deviation([333212, 333999]));
 
 
 

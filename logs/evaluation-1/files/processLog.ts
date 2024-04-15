@@ -63,7 +63,7 @@ function processLog(logFilePath: string, outputCsvPath: string): void {
     });
 }
 
-const logFilePath = 'logs/evaluation-1/with-aggregator-bvp/120second.log';
-const outputCsvPath = 'logs/evaluation-1/with-aggregator-bvp/csv/120second.csv';
+const logFilePath = 'logs/csv/aggregator.log';
+const outputCsvPath = 'logs/csv/output.csv';
 
 processLog(logFilePath, outputCsvPath);
