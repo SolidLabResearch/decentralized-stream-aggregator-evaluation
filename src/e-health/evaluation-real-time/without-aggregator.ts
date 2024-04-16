@@ -2,10 +2,8 @@ import { RSPEngine, RSPQLParser, RDFStream } from "rsp-js";
 import axios from 'axios';
 import * as fs from 'fs';
 import * as http from 'http';
-import * as net from 'net';
 import * as SETUP from '../../config/setup.json'
 import { find_relevant_streams } from "./Util";
-import { EventEmitter } from "ws";
 const N3 = require('n3');
 const parser = new N3.Parser();
 const solid_pod_location = "http://n061-14a.wall2.ilabt.iminds.be:3000/participant6/";
@@ -25,30 +23,16 @@ WHERE {
 }
 `;
 const port = 8084;
-const number_of_iterations = 33;
-const parsed_query = new RSPQLParser().parse(query);
-let rsp_engine: RSPEngine | null = null;
+const rsp_engine = new RSPEngine(query);
+const rsp_parser = new RSPQLParser();
+const server = http.createServer(request_handler);
+const rsp_emitter = rsp_engine.register();
+const stream_array: string[] = []
+const parsed_query = rsp_parser.parse(query);
 
-run_repeatedly(number_of_iterations);
+without_aggregator();
 
-async function run_repeatedly(times: number) {
-    for (let i = 0; i < times; i++) {
-        await run_code(i);
-    }
-}
-
-async function run_code(iteration: number) {
-    const stream_array: string[] = [];
-    if (!rsp_engine) {
-        rsp_engine = new RSPEngine(query);
-    }
-
-    const log_file = `without-aggregator-log-${iteration}.csv`;
-    await without_aggregator(stream_array, log_file);
-}
-
-
-export async function without_aggregator(stream_array: string[], log_file: string) {
+export async function without_aggregator() {
     const start_find_ldes_stream = Date.now();
     await find_relevant_streams(solid_pod_location, ["wearable.skt"]).then((streams) => {
         if (streams) {
@@ -59,9 +43,9 @@ export async function without_aggregator(stream_array: string[], log_file: strin
     parsed_query.s2r.forEach((stream: any) => {
         stream_array.push(stream.stream_name);
     });
-    setupServer(port);
+    setupServer(port, server);
     for (const stream of stream_array) {
-        const stream_location = rsp_engine!.getStream(stream) as RDFStream;
+        const stream_location = rsp_engine.getStream(stream) as RDFStream;
         const time_before_subscribing = Date.now();
         const if_subscription_is_true = subscribe_notifications(stream_location);
         if (if_subscription_is_true) {
@@ -71,8 +55,13 @@ export async function without_aggregator(stream_array: string[], log_file: strin
         console.log(`Subscribed to notifications for stream ${stream}`);
     }
     let time_to_start_subscribing_results = Date.now();
-    const rsp_emitter = rsp_engine!.register();
     subscribe_to_results(rsp_emitter, time_to_start_subscribing_results);
+}
+
+async function setupServer(port: number, server: any) {
+    server.listen(port, () => {
+        console.log(`Server running at http://localhost:${port}/`);
+    });
 }
 
 async function request_handler(request: http.IncomingMessage, response: http.ServerResponse) {
@@ -83,10 +72,13 @@ async function request_handler(request: http.IncomingMessage, response: http.Ser
         });
         request.on('end', async () => {
             try {
-                const time_before_preprocessing = Date.now();
                 const notification = JSON.parse(body);
                 const resource_location = notification.object;
+                const time_before_fetching = Date.now();
                 const response_fetch = await axios.get(resource_location);
+                const time_after_fetching = Date.now();
+                fs.appendFileSync(`without-aggregator-log.csv`, `time_to_fetch_event,${time_after_fetching - time_before_fetching}\n`);
+                const time_before_preprocessing = Date.now();
                 const event_data = response_fetch.data;
                 const store = new N3.Store();
                 await parser.parse(event_data, (error: any, quad: any) => {
@@ -99,7 +91,7 @@ async function request_handler(request: http.IncomingMessage, response: http.Ser
                 });
                 const timestamp = store.getQuads(null, "https://saref.etsi.org/core/hasTimestamp", null, null)[0].object.value;
                 const timestamp_epoch = Date.parse(timestamp);
-                const stream = rsp_engine!.getStream(ldes_location) as RDFStream;
+                const stream = rsp_engine.getStream(ldes_location) as RDFStream;
                 const time_after_preprocessing = Date.now();
                 fs.appendFileSync(`without-aggregator-log.csv`, `time_to_preprocess_event,${time_after_preprocessing - time_before_preprocessing}\n`);
                 add_event_to_rsp_engine(store, [stream], timestamp_epoch);
@@ -233,42 +225,5 @@ export function subscribe_to_results(rsp_emitter: any, time_to_start_subscribing
     rsp_emitter.on('RStream', listener);
     rsp_emitter.on('end', () => {
         rsp_emitter.removeListener('RStream', listener);
-    });
-}
-
-function reset_state(event_emitter: EventEmitter, rsp_engine: RSPEngine) {
-    event_emitter.removeAllListeners('RStream');
-    event_emitter.removeAllListeners('end');
-    rsp_engine.windows[0].active_windows = new Map();
-    rsp_engine.windows[0].t0 = 0;
-    rsp_engine.windows[0].time = 0;
-}
-async function setupServer(port: number) {
-    const port_is_used = await if_port_in_use(port);
-    if (!port_is_used) {
-        const server = http.createServer(request_handler);
-        server.listen(port, () => {
-            console.log(`Server is listening on port ${port}`);
-        });
-    } else {
-        console.error(`Port ${port} is already in use`);
-    }
-}
-
-async function if_port_in_use(port: number): Promise<boolean> {
-    return new Promise((resolve, reject) => {
-        const server = net.createServer().once('error', (err: any) => {
-            if (err.code === 'EADDRINUSE') {
-                resolve(true);
-            }
-            else {
-                reject(false);
-            }
-        }).once('listening', () => {
-            server.once('close', () => {
-                resolve(false);
-            }).close();
-        }).listen(port, '127.0.0.1');
-
     });
 }
