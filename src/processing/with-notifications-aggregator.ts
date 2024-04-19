@@ -35,23 +35,8 @@ lines.forEach((line) => {
 // console.log(calculate_standard_deviation(received_aggregation_event_array));
 // console.log(calculate_sum(received_aggregation_event_array));
 
-// console.log(calculate_sum(pre_preprocess_array));
-// console.log(calculate_mean(pre_preprocess_array));
-// console.log(calculate_standard_deviation(pre_preprocess_array));
-
-// console.log(calculate_sum(pre_preprocess_array));
-// console.log(calculate_sum(add_event_to_rsp_engine_array));
-// console.log(calculate_sum(received_aggregation_event_array));
-
-// console.log(calculate_mean([398, 364]));
-// console.log(calculate_standard_deviation([398, 364]));
-
-// console.log(calculate_mean([201580, 144929]));
-// console.log(calculate_standard_deviation([201580, 144929]));
-
-// console.log(calculate_mean([319989, 312405]))
-// console.log(calculate_standard_deviation([319989, 312405]));
-
+console.log(calculate_mean(pre_preprocess_array));
+console.log(calculate_standard_deviation(pre_preprocess_array));
 
 console.log(calculate_mean(add_event_to_rsp_engine_array));
 console.log(calculate_standard_deviation(add_event_to_rsp_engine_array));
