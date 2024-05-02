@@ -8,17 +8,24 @@ const N3 = require('n3');
 const parser = new N3.Parser();
 const solid_pod_location = "http://n061-14a.wall2.ilabt.iminds.be:3000/participant6/";
 const ldes_location = "http://n061-14a.wall2.ilabt.iminds.be:3000/participant6/skt/";
+const ldes_location_2 = "http://n061-14a.wall2.ilabt.iminds.be:3000/participant6/bvp/";
+
 const query = `
 PREFIX saref: <https://saref.etsi.org/core/>
 PREFIX dahccsensors: <https://dahcc.idlab.ugent.be/Homelab/SensorsAndActuators/>
-PREFIX : <https://rsp.js
+PREFIX : <https://rsp.js> 
 REGISTER RStream <output> AS
 SELECT (MAX(?o) as ?maxSKT)
 FROM NAMED WINDOW :w1 ON STREAM <${ldes_location}> [RANGE 300000 STEP 60000]
+FROM NAMED WINDOW :w2 ON STREAM <${ldes_location_2}> [RANGE 300000 STEP 60000]
 WHERE {
     WINDOW :w1 {
         ?s saref:hasValue ?o .
         ?s saref:relatesToProperty dahccsensors:wearable.skt .
+    }
+    WINDOW :w2 {
+        ?s saref:hasValue ?o .
+        ?s saref:relatesToProperty dahccsensors:wearable.bvp .
     }   
 }
 `;
@@ -45,7 +52,7 @@ export async function without_aggregator() {
     });
     setupServer(port, server);
     for (const stream of stream_array) {
-        const stream_location = rsp_engine.getStream(stream) as RDFStream;
+        const stream_location = rsp_engine.getStream(stream) as RDFStream;        
         const time_before_subscribing = Date.now();
         const if_subscription_is_true = subscribe_notifications(stream_location);
         if (if_subscription_is_true) {
@@ -140,7 +147,7 @@ async function subscribe_notifications(stream_location: RDFStream) {
     }
 }
 
-async function extract_inbox(stream_location: string) {
+async function extract_inbox(stream_location: string) {        
     const store = new N3.Store();
     try {
         const response = await axios.get(stream_location);
@@ -153,8 +160,8 @@ async function extract_inbox(stream_location: string) {
                     store.addQuad(quad);
                 }
             });
-            const inbox = store.getQuads(null, "http://www.w3.org/ns/ldp#inbox", null)[0].object.value;
-            return ldes_location + inbox;
+            const inbox = store.getQuads(null, "http://www.w3.org/ns/ldp#inbox", null)[0].object.value;                        
+            return stream_location + inbox;
         } else {
             console.error("No response received from the server");
         }

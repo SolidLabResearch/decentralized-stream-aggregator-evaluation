@@ -10,7 +10,7 @@ where {
   ?s ldp:contains ?o
 }
 `, {
-        sources: ['http://n061-14a.wall2.ilabt.iminds.be:3000/participant6/skt/1713449932229/']
+        sources: ['http://n061-14a.wall2.ilabt.iminds.be:3000/participant6/bvp/1714650349425/']
     });
 
     binding_stream.on('data', (data: any) => {
