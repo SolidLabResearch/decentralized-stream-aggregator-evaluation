@@ -2,7 +2,7 @@ const QueryEngine = require('@comunica/query-sparql').QueryEngine;
 
 const myEngine = new QueryEngine();
 
-async function main() {
+async function main2() {
     const binding_stream = await myEngine.queryBindings(`
 PREFIX ldp: <http://www.w3.org/ns/ldp#>
 select (count(?o) as ?number)
@@ -10,7 +10,7 @@ where {
   ?s ldp:contains ?o
 }
 `, {
-        sources: ['http://n061-14a.wall2.ilabt.iminds.be:3000/participant6/bvp/1714650349425/']
+        sources: ['http://n078-03.wall1.ilabt.imec.be:3000/pod1/acc-z/1717164439459/']
     });
 
     binding_stream.on('data', (data: any) => {
@@ -18,4 +18,4 @@ where {
     });
 }
 
-main();
+main2();

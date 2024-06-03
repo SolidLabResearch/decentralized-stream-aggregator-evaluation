@@ -5,24 +5,27 @@ import * as fs from 'fs';
 import { find_relevant_streams } from "../../evaluation-real-time/Util";
 import * as SETUP from "../../../config/setup.json";
 const solid_pod_location = "http://n061-14a.wall2.ilabt.iminds.be:3000/participant6/";
-const ldes_location = "http://n061-14a.wall2.ilabt.iminds.be:3000/participant6/bvp/";
+const ldes_location_one = "http://n061-14a.wall2.ilabt.iminds.be:3000/participant6/skt/";
+const ldes_location_two = "http://n061-14a.wall2.ilabt.iminds.be:3000/participant6/bvp/";
 const query = `
 PREFIX saref: <https://saref.etsi.org/core/>
 PREFIX dahccsensors: <https://dahcc.idlab.ugent.be/Homelab/SensorsAndActuators/>
 PREFIX : <https://rsp.js/>
 REGISTER RStream <output> AS
 SELECT (MAX(?o) as ?maxSKT)
-FROM NAMED WINDOW :w1 ON STREAM <${ldes_location}> [RANGE 300000 STEP 60000]
+FROM NAMED WINDOW :w1 ON STREAM <${ldes_location_one}> [RANGE 300000 STEP 60000]
+FROM NAMED WINDOW :w1 ON STREAM <${ldes_location_two}> [RANGE 300000 STEP 60000]
 WHERE {
     WINDOW :w1 {
         ?s saref:hasValue ?o .
-        ?s saref:relatesToProperty dahccsensors:wearable.bvp .
+        ?s saref:relatesToProperty dahccsensors:wearable.skt .
     }   
 }
 `;
-// change bvp back to skt
 const N3 = require('n3');
 const parser = new N3.Parser();
+
+initializeClients(5);
 
 export async function initializeClients(number_of_clients: number) {
     const promises: Promise<any>[] = [];
@@ -60,6 +63,9 @@ async function without_aggregator_client() {
                 try {
                     const notification = JSON.parse(body);
                     const resource_location = notification.object;
+                    const ldes_inbox: string = notification.target;
+                    const index = ldes_inbox.lastIndexOf("/");
+                    const ldes_location = ldes_inbox.substring(0, index + 1);
                     const time_before_fetching = Date.now();
                     const response_fetch = await axios.get(resource_location);
                     const time_after_fetching = Date.now();
@@ -176,7 +182,7 @@ async function extract_inbox(stream_location: string) {
                 }
             });
             const inbox = store.getQuads(null, "http://www.w3.org/ns/ldp#inbox", null)[0].object.value;
-            return ldes_location + inbox;
+            return stream_location + inbox;
         } else {
             console.error("No response received from the server");
         }

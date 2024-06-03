@@ -1,5 +1,6 @@
 import { LDESinLDP, LDPCommunication } from "@treecg/versionawareldesinldp";
-const ldes_locations = ["http://n061-14a.wall2.ilabt.iminds.be:3000/participant6/skt/", "http://n061-14a.wall2.ilabt.iminds.be:3000/participant6/bvp/", "http://n061-14a.wall2.ilabt.iminds.be:3000/participant6/xyz/"]
+
+const ldes_locations = ["http://n078-03.wall1.ilabt.imec.be:3000/pod1/acc-x/", "http://n078-03.wall1.ilabt.imec.be:3000/pod1/acc-y/", "http://n078-03.wall1.ilabt.imec.be:3000/pod1/acc-z/"]
 
 async function main() {
     for (let ldes_location of ldes_locations) {
@@ -11,5 +12,5 @@ async function main() {
         });
     }
 }
-``
+
 main();
