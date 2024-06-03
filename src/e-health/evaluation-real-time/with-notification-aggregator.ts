@@ -6,8 +6,8 @@ import { find_relevant_streams } from "./Util";
 const N3 = require('n3');
 const parser = new N3.Parser();
 const number_of_iterations = 33;
-const solid_pod_location = 'http://n078-03.wall1.ilabt.imec.be:3000/pod1/acc-x/';
-const ldes_location = 'http://n078-03.wall1.ilabt.imec.be:3000/pod1/acc-x/';
+const solid_pod_location = 'http://n078-03.wall1.ilabt.imec.be:8080/pod1/acc-x/';
+const ldes_location = 'http://n078-03.wall1.ilabt.imec.be:8080/pod1/acc-x/';
 const query = `
 PREFIX saref: <https://saref.etsi.org/core/>
 PREFIX dahccsensors: <https://dahcc.idlab.ugent.be/Homelab/SensorsAndActuators/>
