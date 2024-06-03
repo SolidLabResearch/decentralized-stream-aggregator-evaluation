@@ -6,8 +6,8 @@ import { find_relevant_streams } from "./Util";
 const N3 = require('n3');
 const parser = new N3.Parser();
 const number_of_iterations = 33;
-const solid_pod_location = 'http://n061-14a.wall2.ilabt.iminds.be:3000/participant6/';
-const ldes_location = 'http://n061-14a.wall2.ilabt.iminds.be:3000/participant6/skt/';
+const solid_pod_location = 'http://n078-03.wall1.ilabt.imec.be:3000/pod1/acc-x/';
+const ldes_location = 'http://n078-03.wall1.ilabt.imec.be:3000/pod1/acc-x/';
 const query = `
 PREFIX saref: <https://saref.etsi.org/core/>
 PREFIX dahccsensors: <https://dahcc.idlab.ugent.be/Homelab/SensorsAndActuators/>
@@ -18,7 +18,7 @@ FROM NAMED WINDOW :w1 ON STREAM <${ldes_location}> [RANGE 300000 STEP 60000]
 WHERE {
     WINDOW :w1 {
         ?s saref:hasValue ?o .
-        ?s saref:relatesToProperty dahccsensors:wearable.skt .
+        ?s saref:relatesToProperty dahccsensors:wearable.acceleration.x .
     }   
 }
 `;
@@ -57,7 +57,7 @@ async function notification_stream_processor() {
 }
 
 async function subscribe_notifications(ldes_stream: RDFStream, bucket_strategy: string) {
-    const websocket = new WebSocket('ws://localhost:8085//', 'solid-stream-notifications-aggregator', {
+    const websocket = new WebSocket('ws://n078-22.wall1.ilabt.imec.be:8085//', 'solid-stream-notifications-aggregator', {
         perMessageDeflate: false
     });
     websocket.once('open', () => {
