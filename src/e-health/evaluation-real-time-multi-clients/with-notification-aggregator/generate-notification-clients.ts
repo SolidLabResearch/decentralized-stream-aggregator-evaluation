@@ -5,9 +5,9 @@ const N3 = require('n3');
 const parser = new N3.Parser();
 import * as fs from 'fs';
 import { LDESinLDP, LDPCommunication } from "@treecg/versionawareldesinldp";
-const solid_pod_location = "http://n078-03.wall1.ilabt.imec.be:8080/pod1/";
-const notifications_aggregator_location = "";
-const ldes_location = "http://n078-03.wall1.ilabt.imec.be:8080/pod1/acc-x/";
+const solid_pod_location = "http://n078-03.wall1.ilabt.imec.be:3000/pod1/";
+const notifications_aggregator_location = "ws://n078-22.wall1.ilabt.imec.be:8085/";
+const ldes_location = "http://n078-03.wall1.ilabt.imec.be:3000/pod1/acc-x/";
 const query = `
 PREFIX saref: <https://saref.etsi.org/core/>
 PREFIX dahccsensors: <https://dahcc.idlab.ugent.be/Homelab/SensorsAndActuators/>
@@ -25,13 +25,13 @@ WHERE {
 
 export async function initializeNotificationClients(number_of_clients: number) {
     const clients: Promise<any>[] = [];
-    for (let i = 0; i < number_of_clients ; i++){
+    for (let i = 0; i < number_of_clients; i++) {
         clients.push(with_notifications_aggregator_client());
     }
     await Promise.all(clients);
 }
 
-async function with_notifications_aggregator_client(){
+async function with_notifications_aggregator_client() {
     let start_find_ldes_stream = Date.now();
     await find_relevant_streams(solid_pod_location, ["wearable.skt"]).then((streams) => {
         if (streams) {
@@ -49,7 +49,7 @@ async function with_notifications_aggregator_client(){
         stream_array.push(stream.stream_name);
     });
 
-    for (const stream of stream_array){
+    for (const stream of stream_array) {
         const ldes = new LDESinLDP(stream, new LDPCommunication());
         const metadata = await ldes.readMetadata();
         const bucket_strategy = metadata.getQuads(stream + "#BucketizeStrategy", "https://w3id.org/tree#path", null, null)[0].object.value;
@@ -60,11 +60,11 @@ async function with_notifications_aggregator_client(){
         fs.appendFileSync(`with-notification-aggregator-log.csv`, `time_to_subscribe_notifications,${end_subscribe_notifications - start_subscribe_notifications}\n`);
         const time_start_subscribing_results = Date.now();
         subscribe_to_results(rsp_emitter, 33, time_start_subscribing_results);
-        
+
     }
 }
 
-async function subscribe_notifications(ldes_stream: RDFStream, bucket_strategy: string){
+async function subscribe_notifications(ldes_stream: RDFStream, bucket_strategy: string) {
     const websocket = new WebSocket(notifications_aggregator_location, 'solid-stream-notifications-aggregator', {
         perMessageDeflate: false
     });
