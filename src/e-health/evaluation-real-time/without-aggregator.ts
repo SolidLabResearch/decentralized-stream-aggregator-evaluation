@@ -6,9 +6,9 @@ import * as SETUP from '../../config/setup.json'
 import { find_relevant_streams } from "./Util";
 const N3 = require('n3');
 const parser = new N3.Parser();
-const solid_pod_location = "http://n061-14a.wall2.ilabt.iminds.be:3000/participant6/";
-const ldes_location = "http://n061-14a.wall2.ilabt.iminds.be:3000/participant6/skt/";
-const ldes_location_2 = "http://n061-14a.wall2.ilabt.iminds.be:3000/participant6/bvp/";
+const solid_pod_location = "http://n078-03.wall1.ilabt.imec.be:3000/pod1/";
+const ldes_location = "http://n078-03.wall1.ilabt.imec.be:3000/pod1/acc-x/";
+const ldes_location_2 = "http://n078-03.wall1.ilabt.imec.be:3000/pod1/acc-y/";
 
 const query = `
 PREFIX saref: <https://saref.etsi.org/core/>
