@@ -4,8 +4,8 @@ import axios from 'axios';
 import * as fs from 'fs';
 import { find_relevant_streams } from "../../evaluation-real-time/Util";
 import * as SETUP from "../../../config/setup.json";
-const solid_pod_location = "http://n061-14a.wall2.ilabt.iminds.be:3000/participant6/";
-const ldes_location = "http://n061-14a.wall2.ilabt.iminds.be:3000/participant6/bvp/";
+const solid_pod_location = "http://n078-03.wall1.ilabt.imec.be:3000/pod1/";
+const ldes_location = "http://n078-03.wall1.ilabt.imec.be:3000/pod1/acc-x/";
 const query = `
 PREFIX saref: <https://saref.etsi.org/core/>
 PREFIX dahccsensors: <https://dahcc.idlab.ugent.be/Homelab/SensorsAndActuators/>
