@@ -8,6 +8,8 @@ import { LDESinLDP, LDPCommunication } from "@treecg/versionawareldesinldp";
 const solid_pod_location = "http://n078-03.wall1.ilabt.imec.be:3000/pod1/";
 const notifications_aggregator_location = "ws://n078-22.wall1.ilabt.imec.be:8085/";
 const ldes_location = "http://n078-03.wall1.ilabt.imec.be:3000/pod1/acc-x/";
+const ldes_location2 = "http://n078-03.wall1.ilabt.imec.be:3000/pod1/acc-y/";
+const ldes_location3 = "http://n078-03.wall1.ilabt.imec.be:3000/pod1/acc-z/";
 const query = `
 PREFIX saref: <https://saref.etsi.org/core/>
 PREFIX dahccsensors: <https://dahcc.idlab.ugent.be/Homelab/SensorsAndActuators/>
@@ -23,15 +25,35 @@ WHERE {
 }
 `;
 
-export async function initializeNotificationClients(number_of_clients: number) {
+const query2 = `
+PREFIX saref: <https://saref.etsi.org/core/>
+PREFIX dahccsensors: <https://dahcc.idlab.ugent.be/Homelab/SensorsAndActuators/>
+PREFIX : <https://rsp.js/>
+REGISTER RStream <output> AS
+SELECT (MAX(?o) as ?max)
+FROM NAMED WINDOW :w1 ON STREAM <${ldes_location}> [RANGE 300000 STEP 60000]
+FROM NAMED WINDOW :w2 ON STREAM <${ldes_location2}> [RANGE 300000 STEP 60000]
+WHERE {
+    WINDOW :w1 {
+        ?s saref:hasValue ?o .
+        ?s saref:relatesToProperty dahccsensors:wearable.skt .
+    }
+    WINDOW :w2 {
+        ?s saref:hasValue ?o .
+        ?s saref:relatesToProperty dahccsensors:wearable.skt .
+    }
+}
+`;
+
+export async function initializeNotificationClients(number_of_clients: number, number_of_subscribed_streams: number) {
     const clients: Promise<any>[] = [];
     for (let i = 0; i < number_of_clients; i++) {
-        clients.push(with_notifications_aggregator_client());
+        clients.push(with_notifications_aggregator_client(number_of_subscribed_streams));
     }
     await Promise.all(clients);
 }
 
-async function with_notifications_aggregator_client() {
+async function with_notifications_aggregator_client(number_of_subscribed_streams: number) {
     let start_find_ldes_stream = Date.now();
     await find_relevant_streams(solid_pod_location, ["wearable.skt"]).then((streams) => {
         if (streams) {
@@ -39,8 +61,18 @@ async function with_notifications_aggregator_client() {
             console.log(`time_to_find_ldes_stream,${end_find_ldes_stream - start_find_ldes_stream}\n`);
         }
     });
-
-    const rsp_engine = new RSPEngine(query);
+    let rsp_engine;
+    switch (number_of_subscribed_streams) {
+        case 1:
+            rsp_engine = new RSPEngine(query);
+            break;
+        case 2:
+            rsp_engine = new RSPEngine(query2);
+            break;
+        default:
+            rsp_engine = new RSPEngine(query);
+            break;
+    }
     const rsp_parser = new RSPQLParser();
     const rsp_emitter = rsp_engine.register();
     const stream_array: string[] = [];
