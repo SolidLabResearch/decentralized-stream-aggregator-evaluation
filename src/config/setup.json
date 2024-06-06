@@ -1,8 +1,8 @@
 {
     "notification_aggregator_http_server": "http://n061-20b.wall2.ilabt.iminds.be:8085/",
-    "stream_aggregator_http_server": "http://n061-20b.wall2.ilabt.iminds.be:8080/",
+    "stream_aggregator_http_server": "http://n078-22.wall1.ilabt.imec.be:8080/",
     "notification_aggregator_ws_server": "ws://n061-20b.wall2.ilabt.iminds.be:8085/",
-    "stream_aggregator_ws_server": "ws://n061-20b.wall2.ilabt.iminds.be:8080/",
+    "stream_aggregator_ws_server": "ws://n078-22.wall1.ilabt.imec.be:8080/",
     "without_aggregator_http_server": "http://n078-19.wall1.ilabt.imec.be:8084/",
     "without_aggregagtor_location": "http://n078-19.wall1.ilabt.imec.be"
 }
