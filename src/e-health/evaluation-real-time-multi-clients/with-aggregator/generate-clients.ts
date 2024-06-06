@@ -11,7 +11,7 @@ async function generate_aggregator_client() {
     const stream = "http://n078-03.wall1.ilabt.imec.be:3000/pod1/acc-x/";
     const location_of_aggregator = "http://n078-22.wall1.ilabt.imec.be:8080/";
 
-    const websocket = new WebSocket('ws://localhost:8080/', 'solid-stream-aggregator-protocol', {
+    const websocket = new WebSocket('ws://n078-22.wall1.ilabt.imec.be:8080/', 'solid-stream-aggregator-protocol', {
         perMessageDeflate: false
     });
 
