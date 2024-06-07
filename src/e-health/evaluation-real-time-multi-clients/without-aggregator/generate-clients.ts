@@ -12,15 +12,14 @@ PREFIX dahccsensors: <https://dahcc.idlab.ugent.be/Homelab/SensorsAndActuators/>
 PREFIX : <https://rsp.js/>
 REGISTER RStream <output> AS
 SELECT (MAX(?o) as ?maxSKT)
-FROM NAMED WINDOW :w1 ON STREAM <${ldes_location}> [RANGE 300000 STEP 60000]
+FROM NAMED WINDOW :w1 ON STREAM <${ldes_location}> [RANGE 60000 STEP 30000]
 WHERE {
     WINDOW :w1 {
         ?s saref:hasValue ?o .
-        ?s saref:relatesToProperty dahccsensors:wearable.bvp .
+        ?s saref:relatesToProperty dahccsensors:wearable.acceleration.x .
     }   
 }
 `;
-// change bvp back to skt
 const N3 = require('n3');
 const parser = new N3.Parser();
 
