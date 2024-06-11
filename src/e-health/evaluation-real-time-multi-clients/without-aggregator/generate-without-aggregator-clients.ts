@@ -181,6 +181,7 @@ export function add_event_to_rsp_engine(store: any, stream_name: RDFStream[], ti
     stream_name.forEach(async (stream: RDFStream) => {
         let quads = store.getQuads(null, null, null, null);
         for (let quad of quads) {
+            console.log(stream);
             stream.add(quad, timestamp);
         }
     });
