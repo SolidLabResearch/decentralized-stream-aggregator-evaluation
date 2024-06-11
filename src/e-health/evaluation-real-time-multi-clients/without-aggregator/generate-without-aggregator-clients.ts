@@ -119,10 +119,9 @@ async function without_aggregator_client(number_of_subscribed_streams: number) {
                 try {
                     const notification = JSON.parse(body);
                     const resource_location = notification.object;
-                    const ldes_inbox: string = notification.target;
-                    console.log(`Received notification from ${ldes_inbox}`);
-                    
-                    const ldes_location = ldes_inbox.substring(0, ldes_inbox.lastIndexOf("/") + 1);
+                    const ldes_inbox: string = notification.target;            
+                    const lastIndexOf = ldes_inbox.lastIndexOf("/")        
+                    const ldes_location = ldes_inbox.substring(0, ldes_inbox.lastIndexOf("/", lastIndexOf - 1) + 1);
                     const time_before_fetching = Date.now();
                     const response_fetch = await axios.get(resource_location);
                     const time_after_fetching = Date.now();
