@@ -120,6 +120,8 @@ async function without_aggregator_client(number_of_subscribed_streams: number) {
                     const notification = JSON.parse(body);
                     const resource_location = notification.object;
                     const ldes_inbox: string = notification.target;
+                    console.log(`Received notification from ${ldes_inbox}`);
+                    
                     const ldes_location = ldes_inbox.substring(0, ldes_inbox.lastIndexOf("/") + 1);
                     const time_before_fetching = Date.now();
                     const response_fetch = await axios.get(resource_location);
@@ -139,6 +141,7 @@ async function without_aggregator_client(number_of_subscribed_streams: number) {
 
                     const timestamp = store.getQuads(null, "https://saref.etsi.org/core/hasTimestamp", null, null)[0].object.value;
                     const timestamp_epoch = Date.parse(timestamp);
+
                     const stream = rsp_engine.getStream(ldes_location) as RDFStream;
                     const time_after_preprocessing = Date.now();
                     fs.appendFileSync(`without-aggregator-log.csv`, `time_to_preprocess_event,${time_after_preprocessing - time_before_preprocessing}\n`);
@@ -181,7 +184,6 @@ export function add_event_to_rsp_engine(store: any, stream_name: RDFStream[], ti
     stream_name.forEach(async (stream: RDFStream) => {
         let quads = store.getQuads(null, null, null, null);
         for (let quad of quads) {
-            console.log(stream);
             stream.add(quad, timestamp);
         }
     });
