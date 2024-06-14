@@ -78,6 +78,8 @@ WHERE {
 }
 `;
 
+
+
 async function without_aggregator_client(number_of_subscribed_streams: number) {
     let rsp_engine: RSPEngine;
     const rsp_parser = new RSPQLParser();
@@ -119,8 +121,8 @@ async function without_aggregator_client(number_of_subscribed_streams: number) {
                 try {
                     const notification = JSON.parse(body);
                     const resource_location = notification.object;
-                    const ldes_inbox: string = notification.target;            
-                    const lastIndexOf = ldes_inbox.lastIndexOf("/")        
+                    const ldes_inbox: string = notification.target;
+                    const lastIndexOf = ldes_inbox.lastIndexOf("/")
                     const ldes_location = ldes_inbox.substring(0, ldes_inbox.lastIndexOf("/", lastIndexOf - 1) + 1);
                     const time_before_fetching = Date.now();
                     const response_fetch = await axios.get(resource_location);
@@ -168,7 +170,7 @@ async function without_aggregator_client(number_of_subscribed_streams: number) {
         let stream_location = rsp_engine.getStream(stream) as RDFStream;
         const time_before_subscribing = Date.now();
         const if_subscription_is_true = await subscribe_notifications(stream_location, http_port);
-        if (if_subscription_is_true){
+        if (if_subscription_is_true) {
             const time_after_subscribing = Date.now();
             fs.appendFileSync(`without-aggregator-log.csv`, `time_to_subscribe_notifications,${time_after_subscribing - time_before_subscribing}\n`);
         }
