@@ -54,8 +54,8 @@ function generate_data(num_events: number, rdfStreams: RDFStream[]) {
                 namedNode('https://dahcc.idlab.ugent.be/Homelab/SensorsAndActuators/wearable.acceleration.x'),
                 defaultGraph(),
             );
-            stream.add(stream_element, i);
             stream.add(stream_element2, i);
+            stream.add(stream_element, i);
         });
     }
 }

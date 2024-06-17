@@ -88,6 +88,9 @@ async function request_handler(request: http.IncomingMessage, response: http.Ser
             try {
                 const notification = JSON.parse(body);
                 const resource_location = notification.object;
+                const ldes_inbox = notification.target;
+                const lastIndexOf = ldes_inbox.lastIndexOf('/');
+                const ldes_location = ldes_inbox.substring(0, ldes_inbox.lastIndexOf('/', lastIndexOf - 1) + 1);
                 const time_before_fetching = Date.now();
                 const response_fetch = await axios.get(resource_location);
                 const time_after_fetching = Date.now();
@@ -228,7 +231,7 @@ export function add_event_to_rsp_engine(store: any, stream_name: RDFStream[], ti
 export function subscribe_to_results(rsp_emitter: any, time_to_start_subscribing_results: number) {
     const listener = (event: any) => {
         let iterable = event.bindings.values();
-        for (let item of iterable) {
+        for (let item of iterable) {            
             const time_recieved_aggregated_result = Date.now();
             fs.appendFileSync(`without-aggregator-log.csv`, `time_received_aggregation_event,${time_recieved_aggregated_result - time_to_start_subscribing_results}\n`);
             time_to_start_subscribing_results = time_recieved_aggregated_result;
