@@ -92,7 +92,6 @@ async function with_notifications_aggregator_client(number_of_subscribed_streams
         fs.appendFileSync(`with-notification-aggregator-log.csv`, `time_to_subscribe_notifications,${end_subscribe_notifications - start_subscribe_notifications}\n`);
         const time_start_subscribing_results = Date.now();
         subscribe_to_results(rsp_emitter, 33, time_start_subscribing_results);
-
     }
 }
 

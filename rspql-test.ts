@@ -44,7 +44,7 @@ function generate_data(num_events: number, rdfStreams: RDFStream[]) {
             const stream_element = quad(
                 namedNode('https://rsp.js/test_subject_' + i),
                 namedNode('https://saref.etsi.org/core/hasValue'),
-                literal("80", namedNode('http://www.w3.org/2001/XMLSchema#integer')),
+                literal(`${Math.random() * 10}`, namedNode('http://www.w3.org/2001/XMLSchema#integer')),
                 defaultGraph(),
             );
 
