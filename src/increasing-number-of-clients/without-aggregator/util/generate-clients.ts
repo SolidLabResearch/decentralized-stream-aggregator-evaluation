@@ -14,7 +14,7 @@ const query = `
 PREFIX saref: <https://saref.etsi.org/core/>
 PREFIX func: <http://extension.org/functions#> 
 PREFIX dahccsensors: <https://dahcc.idlab.ugent.be/Homelab/SensorsAndActuators/>
-PREFIX : <https://rsp.js> 
+PREFIX : <https://rsp.js/> 
 REGISTER RStream <output> AS
 SELECT (func:sqrt(?o * ?o + ?o2 * ?o2 + ?o3 * ?o3) AS ?activityIndex)
 FROM NAMED WINDOW :w1 ON STREAM <${ldes_acc_x}> [RANGE 60000 STEP 20000]
