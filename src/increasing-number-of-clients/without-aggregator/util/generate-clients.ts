@@ -93,7 +93,7 @@ async function without_aggregator_client(number_of_clients: number) {
                     fs.appendFileSync(`without-aggregator-${number_of_clients}-clients.csv`, `time_to_preprocess_event,${time_after_preprocessing - time_before_preprocessing}\n`);
                     add_event_to_rsp_engine(store, [stream], timestamp_epoch);
                     const time_after_adding_event = Date.now();
-                    fs.appendFileSync(`without-aggregator-log.csv`, `time_to_add_event_to_rsp_engine,${time_after_adding_event - time_after_preprocessing}\n`);
+                    fs.appendFileSync(`without-aggregator-${number_of_clients}-clients.csv`, `time_to_add_event_to_rsp_engine,${time_after_adding_event - time_after_preprocessing}\n`);
                     response.writeHead(200, { "Content-Type": "text/plain" });
                     response.end("200 - OK");
                 }

@@ -10,7 +10,7 @@ where {
   ?s ldp:contains ?o
 }
 `, {
-        sources: ['http://n078-03.wall1.ilabt.imec.be:3000/pod1/acc-z/1718365837626/']
+        sources: ['http://n078-03.wall1.ilabt.imec.be:3000/pod1/acc-x/1718783696332/']
     });
 
     binding_stream.on('data', (data: any) => {
