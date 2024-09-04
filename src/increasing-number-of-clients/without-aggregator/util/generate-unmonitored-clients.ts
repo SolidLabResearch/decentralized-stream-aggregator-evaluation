@@ -76,7 +76,7 @@ async function withoutAggregatorClient(number_of_clients: number, current_client
                     const event_data = response_fetch.data;
 
                     const store = new N3.Store();
-                    await parser.parse(event_data, (error, quad, prefixes) => {
+                    await parser.parse(event_data, (error: any, quad: any, prefixes: any) => {
                         if (error) {
                             console.log(error);
                         }
