@@ -1,7 +1,7 @@
 import { RSPEngine, RSPQLParser, RDFStream } from "rsp-js";
 import { Literal } from "n3";
 const N3 = require('n3');
-
+// SELECT (func:sqrt(?o * ?o + ?o2 * ?o2 + ?o3 * ?o3) AS ?activityIndex)
 const { DataFactory } = N3;
 const { namedNode, defaultGraph, quad, literal } = DataFactory;
 const ldes_location = "http://n078-03.wall1.ilabt.imec.be:3000/pod1/acc-x/";
@@ -13,10 +13,10 @@ PREFIX func: <http://extension.org/functions#>
 PREFIX dahccsensors: <https://dahcc.idlab.ugent.be/Homelab/SensorsAndActuators/>
 PREFIX : <https://rsp.js/> 
 REGISTER RStream <output> AS
-SELECT (func:sqrt(?o * ?o + ?o2 * ?o2 + ?o3 * ?o3) AS ?activityIndex)
-FROM NAMED WINDOW :w1 ON STREAM <${ldes_location}> [RANGE 80 STEP 200]
-FROM NAMED WINDOW :w2 ON STREAM <${ldes_location2}> [RANGE 80 STEP 20]
-FROM NAMED WINDOW :w3 ON STREAM <${ldes_location3}> [RANGE 80 STEP 20]
+SELECT ?o
+FROM NAMED WINDOW :w1 ON STREAM <${ldes_location}> [RANGE 60000 STEP 20000]
+FROM NAMED WINDOW :w2 ON STREAM <${ldes_location2}> [RANGE 60000 STEP 20000]
+FROM NAMED WINDOW :w3 ON STREAM <${ldes_location3}> [RANGE 60000 STEP 20000]
 WHERE {
     WINDOW :w1 {
         ?s saref:hasValue ?o .
@@ -32,10 +32,6 @@ WHERE {
     }
 }
 `;
-
-// SELECT ((func:pow(?o,2) + func:pow(?o2,2) + func:pow(?o3,2)) as ?activityIndex)
-
-// SELECT (func:sqrt(func:pow(MAX(?o), 2) + func:pow(MAX(?o2), 2) + func:pow(MAX(?o3), 2)) as ?activityIndex)
 
 function generate_data(num_events: number, rdfStreams: RDFStream[]) {
     for (let i = 0; i < num_events; i++) {
@@ -64,7 +60,7 @@ async function run() {
     const parser = new RSPQLParser();
     const parsed_query = parser.parse(query3);
     console.log(parsed_query.sparql);
-    
+
     const rsp_engine = new RSPEngine(query3);
     let emitter = rsp_engine.register();
     let results = new Array<string>();
@@ -75,7 +71,7 @@ async function run() {
 
     if (stream_x && stream_y && stream_z) {
         const rdfStreams = [stream_x, stream_y, stream_z];
-        generate_data(1000, rdfStreams);
+        generate_dummy_data_with_frequency(5000, rdfStreams, 16);
     }
 
     emitter.on('RStream', (data: any) => {
@@ -89,3 +85,72 @@ async function run() {
 }
 
 run();
+
+
+function sleep(ms: number) {
+    return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+async function generate_dummy_data_with_frequency(number_of_events: number, rdfStreams: RDFStream[], frequency: number) {
+    let eventsGenerated = 0; // Counter to track the number of events generated
+    const sleepInterval = 1000 / frequency; // Time interval between generating each event in milliseconds
+
+    while (eventsGenerated < number_of_events) { 
+        rdfStreams.forEach((stream: any) => {
+            if (eventsGenerated < number_of_events) {
+                const stream_element = quad(
+                    namedNode('https://rsp.js/test_subject_' + eventsGenerated),
+                    namedNode('https://saref.etsi.org/core/hasValue'),
+                    literal(`${Math.random() * 10}`, namedNode('http://www.w3.org/2001/XMLSchema#integer')),
+                    defaultGraph()
+                );
+
+                const stream_element2 = quad(
+                    namedNode('https://rsp.js/test_subject_' + eventsGenerated),
+                    namedNode('https://saref.etsi.org/core/relatesToProperty'),
+                    namedNode('https://dahcc.idlab.ugent.be/Homelab/SensorsAndActuators/wearable.acceleration.x'),
+                    defaultGraph()
+                );
+
+                const stream_element3 = quad(
+                    namedNode('https://rsp.js/test_subject_' + eventsGenerated),
+                    namedNode('https://saref.etsi.org/core/rangeValue'),
+                    literal(`${Math.random() * 10}`, namedNode('http://www.w3.org/2001/XMLSchema#integer')),
+                    defaultGraph()
+                );
+
+                const stream_element4 = quad(
+                    namedNode('https://rsp.js/test_subject_' + eventsGenerated),
+                    namedNode('https://saref.etsi.org/core/ysValue'),
+                    namedNode('https://dahcc.idlab.ugent.be/Homelab/SensorsAndActuators/wearable.acceleration.y'),
+                    defaultGraph()
+                );
+
+                const stream_element5 = quad(
+                    namedNode('https://rsp.js/test_subject_' + eventsGenerated),
+                    namedNode('https://saref.etsi.org/core/superRandom'),
+                    namedNode('https://dahcc.idlab.ugent.be/Homelab/SensorsAndActuators/wearable.acceleratioy'),
+                    defaultGraph()
+                );
+
+                const stream_element6 = quad(
+                    namedNode('https://rsp.js/test_subject_' + eventsGenerated),
+                    namedNode('https://saref.etsi.org/core/relProperty'),
+                    namedNode('https://dahcc.idlab.ugent.be/Homelab/SensorsAndActuators/wearable.acceleration.z'),
+                    defaultGraph()
+                );
+
+                const timestamp = Date.now(); // Get the current epoch time in milliseconds
+                stream.add(stream_element, timestamp);
+                stream.add(stream_element2, timestamp);
+                stream.add(stream_element3, timestamp);
+                stream.add(stream_element4, timestamp);
+                stream.add(stream_element5, timestamp);
+                stream.add(stream_element6, timestamp);
+                eventsGenerated += 1; // Increment the counter
+            }
+        });
+
+        await sleep(sleepInterval); // Sleep for the calculated interval to maintain the frequency
+    }
+}

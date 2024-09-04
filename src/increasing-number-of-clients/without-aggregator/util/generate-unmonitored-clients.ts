@@ -1,9 +1,8 @@
 import { RSPEngine, RSPQLParser, RDFStream } from "rsp-js";
 import * as http from "http";
 import axios from "axios";
-import * as fs from "fs";
-import * as SETUP from "../../../config/setup.json"
-const N3 = require("n3");
+import * as SETUP from "../../../config/setup.json";
+const N3 = require('n3');
 const parser = new N3.Parser();
 const ldes_acc_x = "http://n078-03.wall1.ilabt.imec.be:3000/pod1/acc-x/";
 const ldes_acc_y = "http://n078-03.wall1.ilabt.imec.be:3000/pod1/acc-y/";
@@ -34,20 +33,24 @@ WHERE {
 }
 `;
 
-export async function initializeWithoutAggregatorClients(number_of_clients: number) {
+export async function initializeUnmonitoredClients(number_of_clients: number) {
     const clients: Promise<any>[] = [];
+
     for (let current_client_index = 0; current_client_index < number_of_clients; current_client_index++) {
-        clients.push(without_aggregator_client(number_of_clients, current_client_index));
+        clients.push(withoutAggregatorClient(number_of_clients, current_client_index));
     }
+
     await Promise.all(clients);
 }
 
-async function without_aggregator_client(number_of_clients: number, current_client_index: number) {
-    const rsp_engine: RSPEngine = new RSPEngine(query);
+async function withoutAggregatorClient(number_of_clients: number, current_client_index: number) {
+    const rsp_engine = new RSPEngine(query, {
+        max_delay: 60000,
+    });
+
     const rspql_parser: RSPQLParser = new RSPQLParser();
     const rsp_emitter = rsp_engine.register();
     const stream_array: string[] = [];
-    const start_find_ldes_stream = Date.now();
     const parsed_query = rspql_parser.parse(query);
 
     for (const stream of parsed_query.s2r) {
@@ -59,66 +62,65 @@ async function without_aggregator_client(number_of_clients: number, current_clie
             let body = "";
             request.on("data", (chunk) => {
                 body += chunk.toString();
-            });
+            })
+
             request.on("end", async () => {
                 try {
                     const notification = JSON.parse(body);
                     const resource_location = notification.object;
-                    const ldes_inbox: string = notification.target;
-                    const lastIndexOf = ldes_inbox.lastIndexOf("/")
+                    const ldes_inbox = notification.target;
+
+                    const lastIndexOf = ldes_inbox.lastIndexOf("/");
                     const ldes_location = ldes_inbox.substring(0, ldes_inbox.lastIndexOf("/", lastIndexOf - 1) + 1);
-                    const time_before_fetching = Date.now();
                     const response_fetch = await axios.get(resource_location);
-                    const time_after_fetching = Date.now();
-                    fs.appendFileSync(`without-aggregator-${current_client_index}-client.csv`, `time_to_fetch_notification,${time_after_fetching - time_before_fetching}\n`);
-                    const time_before_preprocessing = Date.now();
                     const event_data = response_fetch.data;
 
                     const store = new N3.Store();
-                    await parser.parse(event_data, (error: any, quad: any) => {
+                    await parser.parse(event_data, (error, quad, prefixes) => {
                         if (error) {
-                            console.error(`Error parsing the event data: ${error}`);
+                            console.log(error);
                         }
                         else if (quad) {
                             store.addQuad(quad);
                         }
                     });
+
                     const timestamp = store.getQuads(null, "https://saref.etsi.org/core/hasTimestamp", null, null)[0].object.value;
                     const timestamp_epoch = Date.parse(timestamp);
                     const stream = rsp_engine.getStream(ldes_location) as RDFStream;
-                    const time_after_preprocessing = Date.now();
-                    fs.appendFileSync(`without-aggregator-${current_client_index}-client.csv`, `time_to_preprocess_event,${time_after_preprocessing - time_before_preprocessing}\n`);
                     add_event_to_rsp_engine(store, [stream], timestamp_epoch);
-                    const time_after_adding_event = Date.now();
-                    fs.appendFileSync(`without-aggregator-${current_client_index}-client.csv`, `time_to_add_event_to_rsp_engine,${time_after_adding_event - time_after_preprocessing}\n`);
                     response.writeHead(200, { "Content-Type": "text/plain" });
                     response.end("200 - OK");
                 }
                 catch (error) {
                     response.writeHead(400, "Bad Request", { "Content-Type": "text/plain" });
                     response.end("400 - Bad Request");
+                    console.log(error);
                 }
             });
         }
         else {
-            response.writeHead(405, "Method Not Allowed", { "Content-Type": "text/plain" });
+            response.writeHead(405, { "Content-Type": "text/plain" });
             response.end("405 - Method Not Allowed");
         }
     });
 
+
     const http_port: any = await setup_server(http_server);
     for (const stream of stream_array) {
         let stream_location = rsp_engine.getStream(stream) as RDFStream;
-        const time_before_subscribing = Date.now();
-        const if_subscription_is_true = await subscribe_notifications(stream_location, http_port);
-        if (if_subscription_is_true) {
-            const time_after_subscribing = Date.now();
-            fs.appendFileSync(`without-aggregator-${current_client_index}-client.csv`, `time_to_subscribe,${time_after_subscribing - time_before_subscribing}\n`);
-        }
-        console.log(`Client subscribed to ${stream_location.name} on the HTTP port ${http_port}`);
+        await subscribe_notifications(stream_location, http_port);
     }
-    const time_to_start_subscribing_results = Date.now();
-    subscribe_to_results(rsp_emitter, time_to_start_subscribing_results, current_client_index);
+    subscribe_to_results(rsp_emitter, current_client_index);
+}
+
+export function add_event_to_rsp_engine(store: any, streams: RDFStream[], timestamp: number) {
+    streams.forEach(async (stream: RDFStream) => {
+        let quads = store.getQuads(null, null, null, null);
+        for (let quad of quads) {
+            stream.add(quad, timestamp);
+        }
+    });
 }
 
 export function setup_server(http_server: any): Promise<number> {
@@ -128,15 +130,6 @@ export function setup_server(http_server: any): Promise<number> {
             resolve(http_port);
         });
         http_server.on('error', reject);
-    });
-}
-
-export function add_event_to_rsp_engine(store: any, streams: RDFStream[], timestamp: number) {
-    streams.forEach(async (stream: RDFStream) => {
-        let quads = store.getQuads(null, null, null, null);
-        for (let quad of quads) {
-            stream.add(quad, timestamp);
-        }
     });
 }
 
@@ -231,14 +224,11 @@ async function extract_subscription_server(resource: string) {
     }
 }
 
-export function subscribe_to_results(rsp_emitter: any, time_to_start_subscribing_results: number, current_client_index: number) {
+export function subscribe_to_results(rsp_emitter: any, current_client_index: number) {
     const listener = (event: any) => {
         let iterable = event.bindings.values();
         for (let item of iterable) {
-            const time_recieved_aggregated_result = Date.now();
-            fs.appendFileSync(`without-aggregator-${current_client_index}-client.csv`, `time_received_aggregation_event,${time_recieved_aggregated_result - time_to_start_subscribing_results}\n`);
-            time_to_start_subscribing_results = time_recieved_aggregated_result;
-            fs.appendFileSync(`result-${current_client_index}-client.csv`, `${item.value}\n`);
+            console.log(`Client ${current_client_index} - Activity Index: ${item.get('?activityIndex')}`);
         }
     }
     rsp_emitter.on('RStream', listener);

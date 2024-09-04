@@ -41,13 +41,13 @@ WHERE {
 
 export async function initializeNotificationClients(number_of_clients: number) {
     const clients: Promise<any>[] = [];
-    for (let i = 0; i < number_of_clients; i++) {
-        clients.push(with_notifications_aggregator_client(number_of_clients));
+    for (let current_client_index = 0; current_client_index < number_of_clients; current_client_index++) {
+        clients.push(with_notifications_aggregator_client(number_of_clients, current_client_index));
     }
     await Promise.all(clients);
 }
 
-async function with_notifications_aggregator_client(number_of_clients: number) {
+async function with_notifications_aggregator_client(number_of_clients: number, current_client_index: number) {
     let start_find_ldes_stream = Date.now();
     await find_relevant_streams(solid_pod_location, ["wearable.acceleration.x", "wearable.acceleration.y", "wearable.acceleration.z"]).then((streams) => {
         if (streams) {
@@ -73,9 +73,9 @@ async function with_notifications_aggregator_client(number_of_clients: number) {
         const start_subscribe_notifications = Date.now();
         await subscribe_notifications(stream_location, bucket_strategy, number_of_clients);
         const end_subscribe_notifications = Date.now();
-        fs.appendFileSync(`with-notification-aggregator-${number_of_clients}-clients.csv`, `time_to_subscribe_notifications,${end_subscribe_notifications - start_subscribe_notifications}\n`);
+        fs.appendFileSync(`with-notification-aggregator-${current_client_index}-client.csv`, `time_to_subscribe_notifications,${end_subscribe_notifications - start_subscribe_notifications}\n`);
         const time_start_subscribing_results = Date.now();
-        subscribe_to_results(rsp_emitter, 33, time_start_subscribing_results, number_of_clients);
+        subscribe_to_results(rsp_emitter, 33, time_start_subscribing_results, current_client_index);
     }
 }
 
@@ -145,7 +145,7 @@ export async function find_public_type_index(solid_pod_url: string): Promise<str
     }
 }
 
-async function subscribe_notifications(ldes_stream: RDFStream, bucket_strategy: string, number_of_clients: number) {
+async function subscribe_notifications(ldes_stream: RDFStream, bucket_strategy: string, current_client_index: number) {
     const websocket = new WebSocket(stream_notifications_aggregator_location, 'solid-stream-notifications-aggregator', {
         perMessageDeflate: false
     });
@@ -171,10 +171,10 @@ async function subscribe_notifications(ldes_stream: RDFStream, bucket_strategy: 
         const timestamp = stream_store.getQuads(null, bucket_strategy, null, null)[0].object.value;
         const timestamp_epoch = Date.parse(timestamp);
         const time_after_preprocessing = Date.now();
-        fs.appendFileSync(`with-notification-aggregator-${number_of_clients}-clients.csv`, `time_to_preprocess_event,${time_after_preprocessing - time_before_preprocessing}\n`);
+        fs.appendFileSync(`with-notification-aggregator-${current_client_index}-client.csv`, `time_to_preprocess_event,${time_after_preprocessing - time_before_preprocessing}\n`);
         add_event_to_rsp_engine(stream_store, [ldes_stream], timestamp_epoch);
         const time_after_adding_event = Date.now();
-        fs.appendFileSync(`with-notification-aggregator-${number_of_clients}-clients.csv`, `time_to_add_event_to_rsp_engine,${time_after_adding_event - time_after_preprocessing}\n`);
+        fs.appendFileSync(`with-notification-aggregator-${current_client_index}-client.csv`, `time_to_add_event_to_rsp_engine,${time_after_adding_event - time_after_preprocessing}\n`);
     });
 }
 
@@ -188,15 +188,15 @@ export function add_event_to_rsp_engine(store: any, stream_name: RDFStream[], ti
     });
 }
 
-async function subscribe_to_results(rsp_emitter: any, i: number, time_start_subscribing_results: number, number_of_clients: number) {
+async function subscribe_to_results(rsp_emitter: any, i: number, time_start_subscribing_results: number, current_client_index: number) {
     const listener = (event: any) => {
         let iterable = event.bindings.values();
         for (let item of iterable) {
             const time_received_aggregation_event = Date.now();
             const timestamp = Date.now();
-            fs.appendFileSync(`with-notification-aggregator-${number_of_clients}-clients.csv`, `time_received_aggregation_event,${time_received_aggregation_event - time_start_subscribing_results}\n`);
+            fs.appendFileSync(`with-notification-aggregator-${current_client_index}-client.csv`, `time_received_aggregation_event,${time_received_aggregation_event - time_start_subscribing_results}\n`);
             time_start_subscribing_results = time_received_aggregation_event;
-            fs.appendFileSync(`output.txt`, `${timestamp},${item.value}\n`);
+            fs.appendFileSync(`without-notification-aggregator-${current_client_index}-client-results.csv`, `${timestamp},${item.value}\n`);
         }
     }
     rsp_emitter.on('RStream', listener);

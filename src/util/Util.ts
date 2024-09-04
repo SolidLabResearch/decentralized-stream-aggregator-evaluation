@@ -11,12 +11,24 @@ export function calculate_standard_deviation(values: number[]): number {
 }
 
 export function find_maximum(values: number[]): number {
-    return Math.max(...values);
+    let max = -Infinity;
+    for (let i = 0; i < values.length; i++) {
+        if (values[i] > max) {
+            max = values[i];
+        }
+    }
+    return max;
 }
 
-export function find_minimum(values: number[]): number {
-    return Math.min(...values);
-}   
+export function find_minimum(values: number[]): number {    
+    let min = Infinity;
+    for (let i = 0; i < values.length; i++) {
+        if (values[i] < min) {
+            min = values[i];
+        }
+    }
+    return min;
+}
 
 export function calculate_sum(values: number[]): number {
     return values.reduce((acc, val) => acc + val, 0);

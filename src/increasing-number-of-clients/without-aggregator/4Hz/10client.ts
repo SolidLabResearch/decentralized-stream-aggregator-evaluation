@@ -1,7 +1,9 @@
 import { initializeWithoutAggregatorClients } from "../util/generate-clients";
+import { initializeUnmonitoredClients } from "../util/generate-unmonitored-clients";
 
-async function ten_client() {
-    await initializeWithoutAggregatorClients(10);
+async function five_client() {
+    initializeWithoutAggregatorClients(1);
+    initializeUnmonitoredClients(9);
 }
 
-ten_client();
+five_client();
