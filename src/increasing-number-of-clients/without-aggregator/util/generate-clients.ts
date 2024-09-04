@@ -39,6 +39,7 @@ export async function initializeWithoutAggregatorClients(number_of_clients: numb
     for (let current_client_index = 0; current_client_index < number_of_clients; current_client_index++) {
         clients.push(without_aggregator_client(number_of_clients, current_client_index));
     }
+    fs.appendFileSync(`without-aggregator-${number_of_clients}-clients.csv`, `starting_time,${Date.now()}\n`);
     await Promise.all(clients);
 }
 
