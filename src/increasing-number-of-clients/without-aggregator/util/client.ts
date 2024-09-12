@@ -8,6 +8,9 @@ import { add_event_to_rsp_engine, subscribe_notifications, subscribe_to_results,
 
 const parser = new N3.Parser();
 
+const ldes_acc_x = "http://n078-03.wall1.ilabt.imec.be:3000/pod1/acc-x/";
+const ldes_acc_y = "http://n078-03.wall1.ilabt.imec.be:3000/pod1/acc-y/";
+const ldes_acc_z = "http://n078-03.wall1.ilabt.imec.be:3000/pod1/acc-z/";
 const query = `
 PREFIX saref: <https://saref.etsi.org/core/>
 PREFIX func: <http://extension.org/functions#> 
@@ -15,9 +18,9 @@ PREFIX dahccsensors: <https://dahcc.idlab.ugent.be/Homelab/SensorsAndActuators/>
 PREFIX : <https://rsp.js/> 
 REGISTER RStream <output> AS
 SELECT (func:sqrt(?o * ?o + ?o2 * ?o2 + ?o3 * ?o3) AS ?activityIndex)
-FROM NAMED WINDOW :w1 ON STREAM <http://n078-03.wall1.ilabt.imec.be:3000/pod1/acc-x/> [RANGE 60000 STEP 20000]
-FROM NAMED WINDOW :w2 ON STREAM <http://n078-03.wall1.ilabt.imec.be:3000/pod1/acc-y/> [RANGE 60000 STEP 20000]
-FROM NAMED WINDOW :w3 ON STREAM <http://n078-03.wall1.ilabt.imec.be:3000/pod1/acc-z/> [RANGE 60000 STEP 20000]
+FROM NAMED WINDOW :w1 ON STREAM <${ldes_acc_x}> [RANGE 60000 STEP 20000]
+FROM NAMED WINDOW :w2 ON STREAM <${ldes_acc_y}> [RANGE 60000 STEP 20000]
+FROM NAMED WINDOW :w3 ON STREAM <${ldes_acc_z}> [RANGE 60000 STEP 20000]
 WHERE {
     WINDOW :w1 {
         ?s saref:hasValue ?o .
