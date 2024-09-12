@@ -84,7 +84,8 @@ async function run() {
     console.log(results);
 }
 
-run();
+// run();
+
 
 
 function sleep(ms: number) {
@@ -95,7 +96,7 @@ async function generate_dummy_data_with_frequency(number_of_events: number, rdfS
     let eventsGenerated = 0; // Counter to track the number of events generated
     const sleepInterval = 1000 / frequency; // Time interval between generating each event in milliseconds
 
-    while (eventsGenerated < number_of_events) { 
+    while (eventsGenerated < number_of_events) {
         rdfStreams.forEach((stream: any) => {
             if (eventsGenerated < number_of_events) {
                 const stream_element = quad(
@@ -154,3 +155,12 @@ async function generate_dummy_data_with_frequency(number_of_events: number, rdfS
         await sleep(sleepInterval); // Sleep for the calculated interval to maintain the frequency
     }
 }
+
+async function test() {
+    const cpu_usage = process.cpuUsage();
+    const memory_usage = process.memoryUsage();
+    console.log(cpu_usage);
+    console.log(memory_usage);
+}
+
+test();

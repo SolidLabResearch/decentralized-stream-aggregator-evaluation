@@ -141,7 +141,7 @@ export function add_event_to_rsp_engine(store: any, streams: RDFStream[], timest
     });
 }
 
-async function subscribe_notifications(stream_location: RDFStream, http_port: number) {
+export async function subscribe_notifications(stream_location: RDFStream, http_port: number) {
     const inbox = await extract_inbox(stream_location.name) as string;
     const subscription_server = await extract_subscription_server(inbox);
     if (subscription_server) {
