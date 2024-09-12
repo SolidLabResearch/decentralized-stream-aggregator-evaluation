@@ -86,14 +86,19 @@ async function without_aggregator_client(number_of_clients: number, current_clie
                     const response_fetch = await axios.get(resource_location);
                     const time_after_fetching = Date.now();
                     fs.appendFileSync(`without-aggregator-${current_client_index}-client.csv`, `time_to_fetch_notification,${time_after_fetching - time_before_fetching}\n`);
-
                     const store = new N3.Store();
                     await parser.parse(response_fetch.data, (error, quad) => {
-                        if (quad) store.addQuad(quad);
+                        if (error) {
+                            console.error(`Error parsing quads: ${error}`);
+                        }
+                        else if (quad) {
+                            store.addQuad(quad);
+                        }
                     });
                     const timestamp = store.getQuads(null, "https://saref.etsi.org/core/hasTimestamp", null, null)[0].object.value;
                     const timestamp_epoch = Date.parse(timestamp);
                     const stream = rsp_engine.getStream(ldes_inbox) as RDFStream;
+                    console.log(timestamp_epoch, response_fetch.data, stream);
                     add_event_to_rsp_engine(store, [stream], timestamp_epoch);
                     response.writeHead(200, { "Content-Type": "text/plain" });
                     response.end("200 - OK");
