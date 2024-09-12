@@ -85,6 +85,8 @@ async function without_aggregator_client(number_of_clients: number, current_clie
                     const notification = JSON.parse(body);
                     const resource_location = notification.object;
                     const ldes_inbox = notification.target;
+                    const lastIndexOf = ldes_inbox.lastIndexOf("/");
+                    const ldes_location = ldes_inbox.substring(0, ldes_inbox.lastIndexOf("/", lastIndexOf - 1) + 1);
                     const time_before_fetching = Date.now();
                     const response_fetch = await axios.get(resource_location);
                     const time_after_fetching = Date.now();
@@ -100,7 +102,7 @@ async function without_aggregator_client(number_of_clients: number, current_clie
                     });
                     const timestamp = store.getQuads(null, "https://saref.etsi.org/core/hasTimestamp", null, null)[0].object.value;
                     const timestamp_epoch = Date.parse(timestamp);
-                    const stream = rsp_engine.getStream(ldes_inbox) as RDFStream;
+                    const stream = rsp_engine.getStream(ldes_location) as RDFStream;
                     console.log(timestamp_epoch, response_fetch.data, stream);
                     add_event_to_rsp_engine(store, [stream], timestamp_epoch);
                     response.writeHead(200, { "Content-Type": "text/plain" });
