@@ -116,7 +116,14 @@ async function without_aggregator_client(number_of_clients: number, current_clie
     const http_port = await setup_server(http_server);
     for (const stream of stream_array) {
         let stream_location = rsp_engine.getStream(stream) as RDFStream;
-        await subscribe_notifications(stream_location, http_port);
+        const if_subscription = await subscribe_notifications(stream_location, http_port);
+        if (if_subscription) {
+            console.log(`Subscribed to ${stream}`);
+        }
+        else {
+            console.log(`Failed to subscribe to ${stream}`);
+        }
+
     }
 
     subscribe_to_results(rsp_emitter, Date.now(), current_client_index);
