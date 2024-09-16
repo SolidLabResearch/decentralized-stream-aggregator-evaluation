@@ -67,8 +67,8 @@ async function without_aggregator_client(number_of_clients: number, current_clie
         fs.appendFileSync(logFile, logData);
     }
 
-    // Log every 5 seconds
-    setInterval(logCpuMemoryUsage, 5000);
+    // Log every 0.5 seconds
+    setInterval(logCpuMemoryUsage, 500);
 
     for (const stream of parsed_query.s2r) {
         stream_array.push(stream.stream_name);
