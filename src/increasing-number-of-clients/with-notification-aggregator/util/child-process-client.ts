@@ -7,7 +7,7 @@ import { RDFStream, RSPEngine, RSPQLParser } from 'rsp-js';
 const ldes_acc_x = "http://n078-03.wall1.ilabt.imec.be:3000/pod1/acc-x/";
 const ldes_acc_y = "http://n078-03.wall1.ilabt.imec.be:3000/pod1/acc-y/";
 const ldes_acc_z = "http://n078-03.wall1.ilabt.imec.be:3000/pod1/acc-z/";
-const location_of_aggregator = "http://n078-22.wall1.ilabt.imec.be:8080/";
+const location_of_aggregator = "http://n078-22.wall1.ilabt.imec.be:8085/";
 const solid_pod_location = "http://n078-03.wall1.ilabt.imec.be:3000/pod1/";
 const N3 = require('n3');
 const parser = new N3.Parser();
