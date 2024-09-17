@@ -56,10 +56,7 @@ async function generateNotificationAggregatorClient(current_client_index: number
         const logData = `${timestamp},${cpuUsage.user},${cpuUsage.system},${memoryUsage.rss},${memoryUsage.heapTotal},${memoryUsage.heapUsed},${memoryUsage.external}\n`;
         fs.appendFileSync(logFile, logData);
     }
-
-    setInterval(() => {
-        logCpuMemoryUsage
-    }, 500);
+    setInterval(logCpuMemoryUsage, 500);
 
     await find_relevant_streams(solid_pod_location, ["wearable.acceleration.x", "wearable.acceleration.y", "wearable.acceleration.z"]).then((streams) => {
         if (streams) {
