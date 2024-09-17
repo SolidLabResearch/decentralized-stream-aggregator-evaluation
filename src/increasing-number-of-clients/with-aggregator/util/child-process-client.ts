@@ -81,6 +81,11 @@ function generateAggregatorClient(current_client_index: number): void {
     });
 }
 
-process.on('message', async ({ current_client_index }) => {
-    generateAggregatorClient(current_client_index);
+process.on('message', async (message: { current_client_index: number }) => {
+    if (message && message.current_client_index !== undefined){
+        await generateAggregatorClient(message.current_client_index);
+    }
+    else {
+        console.error(`Error : Invalid message received from master process`);
+    }
 });

@@ -7,7 +7,7 @@ async function initializeAggregatorClients(number_of_clients: number): Promise<C
         const child = fork('./child-process-client.ts');
         childProcesses.push(child);
 
-        child.send('start');
+        child.send({ current_client_index: i });
 
         child.on('message', (message: string) => {
             console.log(`Client ${i}: ${message}`);
