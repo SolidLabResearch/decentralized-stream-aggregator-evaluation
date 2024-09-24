@@ -1,15 +1,14 @@
 import { WebSocket } from 'ws';
 import * as fs from 'fs';
-const ldes_acc_x = "http://n078-03.wall1.ilabt.imec.be:3000/pod1/acc-x/";
-const ldes_acc_y = "http://n078-03.wall1.ilabt.imec.be:3000/pod1/acc-y/";
-const ldes_acc_z = "http://n078-03.wall1.ilabt.imec.be:3000/pod1/acc-z/";
-const location_of_aggregator = "http://n078-22.wall1.ilabt.imec.be:8080/";
-
+const ldes_acc_x = "http://n079-11.wall1.ilabt.imec.be:3000/pod1/acc-x/";
+const ldes_acc_y = "http://n079-11.wall1.ilabt.imec.be:3000/pod1/acc-y/";
+const ldes_acc_z = "http://n079-11.wall1.ilabt.imec.be:3000/pod1/acc-z/";
+const location_of_aggregator = "http://n079-09.wall1.ilabt.imec.be:8080/";
 const query = `
 PREFIX saref: <https://saref.etsi.org/core/>
 PREFIX func: <http://extension.org/functions#> 
 PREFIX dahccsensors: <https://dahcc.idlab.ugent.be/Homelab/SensorsAndActuators/>
-PREFIX : <https://rsp.js> 
+PREFIX : <https://rsp.js/> 
 REGISTER RStream <output> AS
 SELECT (func:sqrt(?o * ?o + ?o2 * ?o2 + ?o3 * ?o3) AS ?activityIndex)
 FROM NAMED WINDOW :w1 ON STREAM <${ldes_acc_x}> [RANGE 60000 STEP 20000]
@@ -56,7 +55,7 @@ function generateAggregatorClient(current_client_index: number): void {
     }
 
     setInterval(() => {
-        logCpuMemoryUsage
+        logCpuMemoryUsage()
     }, 500);
 
     websocket.once('open', () => {
@@ -83,6 +82,8 @@ function generateAggregatorClient(current_client_index: number): void {
 
 process.on('message', async (message: { current_client_index: number }) => {
     if (message && message.current_client_index !== undefined){
+        console.log(`Received message from master process to generate client ${message.current_client_index}`);
+        
         await generateAggregatorClient(message.current_client_index);
     }
     else {

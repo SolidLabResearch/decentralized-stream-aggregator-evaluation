@@ -38,7 +38,7 @@ async function main() {
     let parsed_query = rspql_parser.parse(rspql_query);
     let r2r = new R2ROperator(parsed_query.sparql);
     let quad_set = new Set<Quad>();
-    let number_of_quads = 12/3;
+    let number_of_quads = 100/3;
 
     for (let i = 0; i < number_of_quads; i++) {
         const stream_element = quad(
@@ -95,7 +95,13 @@ async function main() {
     }
     let quad_container = new QuadContainer(quad_set, 0);    
     let time = new Date().getTime();
+    let cpu_now = process.cpuUsage();
+    console.log('CPU usage: ', cpu_now);
     let bindings_stream = await r2r.execute(quad_container);
+    let cpu_then = process.cpuUsage(cpu_now);
+    let cpu_without_diff = process.cpuUsage();
+    console.log('CPU without diff: ', cpu_without_diff);
+    console.log('CPU diff: ', cpu_then);
     console.log('Execution time: ', new Date().getTime() - time);
     let count = 0;
     bindings_stream.on('data', (binding: any) => {
@@ -104,10 +110,11 @@ async function main() {
     });
 
     bindings_stream.on('data', (binding: any) => {
-        console.log(binding.toString());
     });
 
     bindings_stream.on('end', () => {
+        let cpu_then = process.cpuUsage(then);
+        console.log('CPU usage: ', cpu_then);
     });
 }
 
