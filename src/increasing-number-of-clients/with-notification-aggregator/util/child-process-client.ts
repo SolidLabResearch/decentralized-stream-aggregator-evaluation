@@ -10,6 +10,7 @@ const ldes_acc_z = "http://n078-03.wall1.ilabt.imec.be:3000/pod1/acc-z/";
 const location_of_aggregator = "http://n078-22.wall1.ilabt.imec.be:8085/";
 const solid_pod_location = "http://n078-03.wall1.ilabt.imec.be:3000/pod1/";
 const N3 = require('n3');
+const { namedNode } = N3.DataFactory;
 const parser = new N3.Parser();
 const query = `
 PREFIX saref: <https://saref.etsi.org/core/>
@@ -112,7 +113,8 @@ async function subscribe_notifications(ldes_stream: RDFStream, bucket_strategy: 
         const stream_event = received_data.event;
         await parser.parse(stream_event, (error: any, triple: any, prefixes: any) => {
             if (triple) {
-                stream_store.addQuad(triple);
+                const graph = namedNode(`${ldes_stream.name}`);
+                stream_store.addQuad(triple.subject, triple.predicate, triple.object, graph);
             }
         });
 
