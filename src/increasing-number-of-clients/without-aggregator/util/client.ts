@@ -5,6 +5,7 @@ import * as http from "http";
 import * as N3 from "n3";
 import * as SETUP from "../../../config/setup.json";
 import { add_event_to_rsp_engine, subscribe_notifications, subscribe_to_results, setup_server } from "./generate-clients";
+import { LDESinLDP, LDPCommunication } from "@treecg/versionawareldesinldp";
 
 const parser = new N3.Parser();
 
@@ -87,6 +88,9 @@ async function without_aggregator_client(number_of_clients: number, current_clie
                     const ldes_inbox = notification.target;
                     const lastIndexOf = ldes_inbox.lastIndexOf("/");
                     const ldes_location = ldes_inbox.substring(0, ldes_inbox.lastIndexOf("/", lastIndexOf - 1) + 1);
+                    const ldes = new LDESinLDP(ldes_location, new LDPCommunication());
+                    const metadata = await ldes.readMetadata();
+                    const bucket_strategy = metadata.getQuads(ldes_location + "#BucketizeStrategy", "https://w3id.org/tree#path", null, null)[0].object.value;
                     const time_before_fetching = Date.now();
                     const response_fetch = await axios.get(resource_location);
                     const time_after_fetching = Date.now();
@@ -100,11 +104,11 @@ async function without_aggregator_client(number_of_clients: number, current_clie
                             store.addQuad(quad);
                         }
                     });
-                    const timestamp = store.getQuads(null, "https://saref.etsi.org/core/hasTimestamp", null, null)[0].object.value;
+                    const timestamp = store.getQuads(null, bucket_strategy, null, null)[0].object.value;
                     const timestamp_epoch = Date.parse(timestamp);
                     const stream = rsp_engine.getStream(ldes_location) as RDFStream;
                     console.log(timestamp_epoch, response_fetch.data, stream);
-                    add_event_to_rsp_engine(store, [stream], timestamp_epoch);
+                    await add_event_to_rsp_engine(store, [stream], timestamp_epoch);
                     response.writeHead(200, { "Content-Type": "text/plain" });
                     response.end("200 - OK");
                 } catch (error) {
