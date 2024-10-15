@@ -122,13 +122,13 @@ async function subscribe_notifications(ldes_stream: RDFStream, bucket_strategy: 
         const timestamp_epoch = Date.parse(timestamp);
         const time_after_preprocessing = Date.now();
         fs.appendFileSync(`notification-aggregator-${current_client_index}-client.csv`, `time_to_preprocess_event,${time_after_preprocessing - time_before_preprocessing}\n`);
-        add_event_to_rsp_engine(stream_store, [ldes_stream], timestamp_epoch);
+        await add_event_to_rsp_engine(stream_store, [ldes_stream], timestamp_epoch);
         const time_after_adding_event = Date.now();
         fs.appendFileSync(`notification-aggregator-${current_client_index}-client.csv`, `time_to_add_event_to_rsp_engine,${time_after_adding_event - time_after_preprocessing}\n`);
     });
 }
 
-export function add_event_to_rsp_engine(store: any, stream_name: RDFStream[], timestamp: number) {
+export async function add_event_to_rsp_engine(store: any, stream_name: RDFStream[], timestamp: number) {
     stream_name.forEach(async (stream: RDFStream) => {
         let quads = store.getQuads(null, null, null, null);
         for (let quad of quads) {

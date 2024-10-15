@@ -3,6 +3,7 @@ import * as http from "http";
 import axios from "axios";
 import * as fs from "fs";
 import * as SETUP from "../../../config/setup.json"
+import { LDESinLDP, LDPCommunication } from "@treecg/versionawareldesinldp";
 const N3 = require("n3");
 const parser = new N3.Parser();
 const ldes_acc_x = "http://n078-03.wall1.ilabt.imec.be:3000/pod1/acc-x/";
@@ -48,7 +49,6 @@ async function without_aggregator_client(number_of_clients: number, current_clie
     const rspql_parser: RSPQLParser = new RSPQLParser();
     const rsp_emitter = rsp_engine.register();
     const stream_array: string[] = [];
-    const start_find_ldes_stream = Date.now();
     const parsed_query = rspql_parser.parse(query);
 
     for (const stream of parsed_query.s2r) {
@@ -71,6 +71,9 @@ async function without_aggregator_client(number_of_clients: number, current_clie
                     const time_before_fetching = Date.now();
                     const response_fetch = await axios.get(resource_location);
                     const time_after_fetching = Date.now();
+                    const ldes = new LDESinLDP(ldes_location, new LDPCommunication());
+                    const metadata = await ldes.readMetadata();
+                    const bucket_strategy = metadata.getQuads(ldes_location + "#BucketizeStrategy", "https://w3id.org/tree#path", null, null)[0].object.value;
                     fs.appendFileSync(`without-aggregator-${current_client_index}-client.csv`, `time_to_fetch_notification,${time_after_fetching - time_before_fetching}\n`);
                     const time_before_preprocessing = Date.now();
                     const event_data = response_fetch.data;
@@ -84,12 +87,13 @@ async function without_aggregator_client(number_of_clients: number, current_clie
                             store.addQuad(quad);
                         }
                     });
-                    const timestamp = store.getQuads(null, "https://saref.etsi.org/core/hasTimestamp", null, null)[0].object.value;
+
+                    const timestamp = store.getQuads(null, bucket_strategy, null, null)[0].object.value;
                     const timestamp_epoch = Date.parse(timestamp);
                     const stream = rsp_engine.getStream(ldes_location) as RDFStream;
                     const time_after_preprocessing = Date.now();
                     fs.appendFileSync(`without-aggregator-${current_client_index}-client.csv`, `time_to_preprocess_event,${time_after_preprocessing - time_before_preprocessing}\n`);
-                    add_event_to_rsp_engine(store, [stream], timestamp_epoch);
+                    await add_event_to_rsp_engine(store, [stream], timestamp_epoch);
                     const time_after_adding_event = Date.now();
                     fs.appendFileSync(`without-aggregator-${current_client_index}-client.csv`, `time_to_add_event_to_rsp_engine,${time_after_adding_event - time_after_preprocessing}\n`);
                     response.writeHead(200, { "Content-Type": "text/plain" });
@@ -132,7 +136,7 @@ export function setup_server(http_server: any): Promise<number> {
     });
 }
 
-export function add_event_to_rsp_engine(store: any, streams: RDFStream[], timestamp: number) {
+export async function add_event_to_rsp_engine(store: any, streams: RDFStream[], timestamp: number) {
     streams.forEach(async (stream: RDFStream) => {
         let quads = store.getQuads(null, null, null, null);
         for (let quad of quads) {

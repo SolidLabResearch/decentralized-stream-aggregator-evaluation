@@ -59,17 +59,16 @@ async function without_aggregator_without_rsp_client(number_of_clients: number, 
         }
     }
 }
-
-
 export function setup_server(http_server: any): Promise<number> {
     return new Promise((resolve, reject) => {
-        http_server.listen(0, (resolve: (arg0: any) => void, reject: any) => {
+        http_server.listen(0, () => {
             const http_port = http_server.address().port;
             resolve(http_port);
         });
         http_server.on('error', reject);
     });
 }
+
 
 export async function subscribe_notifications(stream_location: string, http_port: number) {
     const inbox = await extract_inbox(stream_location) as string;
@@ -160,3 +159,8 @@ async function extract_subscription_server(resource: string) {
         console.error(`Error extracting subscription server from ${resource}`, error)
     }
 }
+
+// Handle message from the parent process
+process.on('message', async ({ number_of_clients, current_client_index }: { number_of_clients: number, current_client_index: number }) => {
+    await without_aggregator_without_rsp_client(number_of_clients, current_client_index);
+});
