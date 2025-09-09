@@ -183,7 +183,7 @@ export function add_event_to_rsp_engine(store: any, stream_name: RDFStream[], ti
     stream_name.forEach(async (stream: RDFStream) => {
         let quads = store.getQuads(null, null, null, null);
         for (let quad of quads) {
-            stream.add(quad, timestamp);
+		stream.add(quad, timestamp);
         }
     });
 }
@@ -196,8 +196,9 @@ async function subscribe_to_results(rsp_emitter: any, i: number, time_start_subs
             const timestamp = Date.now();
             fs.appendFileSync(`with-notification-aggregator-${current_client_index}-client.csv`, `time_received_aggregation_event,${time_received_aggregation_event - time_start_subscribing_results}\n`);
             time_start_subscribing_results = time_received_aggregation_event;
-            fs.appendFileSync(`with-notification-aggregator-${current_client_index}-client-results.csv`, `${timestamp},${item.value}\n`);
-        }
+            fs.appendFileSync(`without-notification-aggregator-${current_client_index}-client-results.csv`, `${timestamp},${item.value}\n`);
+       		process.exit();
+       	}
     }
     rsp_emitter.on('RStream', listener);
     rsp_emitter.on('end', () => {

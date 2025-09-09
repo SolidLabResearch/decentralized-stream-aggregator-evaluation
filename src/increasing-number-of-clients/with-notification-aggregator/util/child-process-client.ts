@@ -10,8 +10,10 @@ const ldes_acc_z = "http://n078-03.wall1.ilabt.imec.be:3000/pod1/acc-z/";
 const location_of_aggregator = "http://n078-22.wall1.ilabt.imec.be:8085/";
 const solid_pod_location = "http://n078-03.wall1.ilabt.imec.be:3000/pod1/";
 const N3 = require('n3');
-const { namedNode } = N3.DataFactory;
+let counter = 0;
+const {namedNode} = N3.DataFactory;
 const parser = new N3.Parser();
+
 const query = `
 PREFIX saref: <https://saref.etsi.org/core/>
 PREFIX func: <http://extension.org/functions#>
@@ -19,9 +21,9 @@ PREFIX dahccsensors: <https://dahcc.idlab.ugent.be/Homelab/SensorsAndActuators/>
 PREFIX : <https://rsp.js>
 REGISTER RStream <output> AS
 SELECT (func:sqrt(?o * ?o + ?o2 * ?o2 + ?o3 * ?o3) AS ?activityIndex)
-FROM NAMED WINDOW :w1 ON STREAM <${ldes_acc_x}> [RANGE 60000 STEP 20000]
-FROM NAMED WINDOW :w2 ON STREAM <${ldes_acc_y}> [RANGE 60000 STEP 20000]
-FROM NAMED WINDOW :w3 ON STREAM <${ldes_acc_z}> [RANGE 60000 STEP 20000]
+FROM NAMED WINDOW :w1 ON STREAM <${ldes_acc_x}> [RANGE 60000 STEP  30000]
+FROM NAMED WINDOW :w2 ON STREAM <${ldes_acc_y}> [RANGE 60000 STEP 30000]
+FROM NAMED WINDOW :w3 ON STREAM <${ldes_acc_z}> [RANGE 60000 STEP 30000]
 WHERE {
     WINDOW :w1 {
         ?s saref:hasValue ?o .
@@ -57,10 +59,8 @@ async function generateNotificationAggregatorClient(current_client_index: number
         const logData = `${timestamp},${cpuUsage.user},${cpuUsage.system},${memoryUsage.rss},${memoryUsage.heapTotal},${memoryUsage.heapUsed},${memoryUsage.external}\n`;
         fs.appendFileSync(logFile, logData);
     }
+    setInterval(logCpuMemoryUsage, 500);
 
-    setInterval(() => {
-        logCpuMemoryUsage()
-    }, 500);
     await find_relevant_streams(solid_pod_location, ["wearable.acceleration.x", "wearable.acceleration.y", "wearable.acceleration.z"]).then((streams) => {
         if (streams) {
             let end_find_ldes_stream = Date.now();
@@ -82,12 +82,12 @@ async function generateNotificationAggregatorClient(current_client_index: number
         const ldes = new LDESinLDP(stream, new LDPCommunication());
         const metadata = await ldes.readMetadata();
         const bucket_strategy = metadata.getQuads(stream + "#BucketizeStrategy", "https://w3id.org/tree#path", null, null)[0].object.value;
-        const stream_location = rsp_engine.getStream(stream) as RDFStream;
-        const start_subscribe_notifications = Date.now();
-        await subscribe_notifications(stream_location, bucket_strategy, current_client_index);
-        const end_subscribe_notifications = Date.now();
-        fs.appendFileSync(`notification-aggregator-${current_client_index}-client.csv`, `time_to_subscribe_notifications,${end_subscribe_notifications - start_subscribe_notifications}\n`);
+  //      const end_subscribe_notifications = Date.now();
+    //     fs.appendFileSync(`notification-aggregator-${current_client_index}-client.csv`, `time_to_subscribe_notifications,${end_subscribe_notifications - start_subscribe_notifications}\n`);
         const time_start_subscribing_results = Date.now();
+	        const stream_location = rsp_engine.getStream(stream) as RDFStream;
+
+	await subscribe_notifications(stream_location, bucket_strategy, current_client_index);
         subscribe_to_results(rsp_emitter, 33, time_start_subscribing_results, current_client_index);
     }
 }
@@ -109,30 +109,31 @@ async function subscribe_notifications(ldes_stream: RDFStream, bucket_strategy: 
         const time_before_preprocessing = Date.now();
         const received_data = JSON.parse(data);
         const stream_store = new N3.Store();
-
+	const graph = namedNode(`${ldes_stream.name}`);
         const stream_event = received_data.event;
         await parser.parse(stream_event, (error: any, triple: any, prefixes: any) => {
             if (triple) {
-                const graph = namedNode(`${ldes_stream.name}`);
-                stream_store.addQuad(triple.subject, triple.predicate, triple.object, graph);
-            }
+              stream_store.addQuad(triple);            }
         });
-
-        const timestamp = stream_store.getQuads(null, bucket_strategy, null, null)[0].object.value;
-        const timestamp_epoch = Date.parse(timestamp);
+        const timestamp = stream_store.getQuads(null, namedNode(`${bucket_strategy}`), null, null)[0].object.value;
+	const timestamp_epoch = Date.parse(timestamp);
         const time_after_preprocessing = Date.now();
         fs.appendFileSync(`notification-aggregator-${current_client_index}-client.csv`, `time_to_preprocess_event,${time_after_preprocessing - time_before_preprocessing}\n`);
         await add_event_to_rsp_engine(stream_store, [ldes_stream], timestamp_epoch);
         const time_after_adding_event = Date.now();
-        fs.appendFileSync(`notification-aggregator-${current_client_index}-client.csv`, `time_to_add_event_to_rsp_engine,${time_after_adding_event - time_after_preprocessing}\n`);
+	fs.appendFileSync(`notification-aggregator-${current_client_index}-client.csv`, `time_to_add_event_to_rsp_engine,${time_after_adding_event - time_after_preprocessing}\n`);
     });
 }
 
 export async function add_event_to_rsp_engine(store: any, stream_name: RDFStream[], timestamp: number) {
     stream_name.forEach(async (stream: RDFStream) => {
         let quads = store.getQuads(null, null, null, null);
+	console.log(`Store Size: ${store.size}`);
         for (let quad of quads) {
-            stream.add(quad, timestamp);
+		counter = counter + 1;
+
+           console.log(`quad added to the stream`, counter);	
+	       	stream.add(quad, timestamp);
         }
     });
 }
@@ -204,17 +205,19 @@ export async function find_public_type_index(solid_pod_url: string): Promise<str
 }
 
 async function subscribe_to_results(rsp_emitter: any, i: number, time_start_subscribing_results: number, current_client_index: number) {
-    const listener = (event: any) => {
+    console.log(`Subscribing to results`);
+	const listener = (event: any) => {
         let iterable = event.bindings.values();
         for (let item of iterable) {
             const time_received_aggregation_event = Date.now();
             const timestamp = Date.now();
-            fs.appendFileSync(`with-notification-aggregator-${current_client_index}-client.csv`, `time_received_aggregation_event,${time_received_aggregation_event - time_start_subscribing_results}\n`);
+            fs.appendFileSync(`notification-aggregator-${current_client_index}-client.csv`, `time_received_aggregation_event,${time_received_aggregation_event - time_start_subscribing_results}\n`);
             time_start_subscribing_results = time_received_aggregation_event;
-            fs.appendFileSync(`without-notification-aggregator-${current_client_index}-client-results.csv`, `${timestamp},${item.value}\n`);
+            fs.appendFileSync(`notification-aggregator-${current_client_index}-client-results.csv`, `${timestamp},${item.value}\n`);
         }
     }
     rsp_emitter.on('RStream', listener);
+  console.log(`listener is created`);
     rsp_emitter.on('end', () => {
         rsp_emitter.removeListener('RStream', listener);
         console.log(`Iteration ${i} has ended`);
