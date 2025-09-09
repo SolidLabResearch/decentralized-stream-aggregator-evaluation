@@ -1,0 +1,11 @@
+Clients,Total_Runs,Successful_Runs,Failed_Runs,Success_Rate_Percent,Avg_Latency_With_Failures_ms,Median_Latency_With_Failures_ms,StdDev_Latency_With_Failures_ms,Avg_Add_Event_ms,Avg_Fetch_Event_ms,Avg_Preprocess_ms,Total_Preprocess_ms
+1,35,35,0,100.0,94926,87924,23103,NaN,NaN,NaN,0
+2,35,35,0,100.0,104865,87783,44520,NaN,NaN,NaN,0
+3,35,35,0,100.0,136550,84241,82865,NaN,NaN,NaN,0
+4,35,35,0,100.0,196627,169625,107088,NaN,NaN,NaN,0
+5,35,35,0,100.0,245869,287310,129249,NaN,NaN,NaN,0
+6,35,35,0,100.0,422370,448979,94625,NaN,NaN,NaN,0
+7,35,35,0,100.0,451079,516812,151364,NaN,NaN,NaN,0
+8,35,31,4,88.6,576614,600487,114793,NaN,NaN,NaN,0
+9,35,30,5,85.7,553838,630348,200404,NaN,NaN,NaN,0
+10,35,14,21,40.0,568309,600000,153214,NaN,NaN,NaN,0
