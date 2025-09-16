@@ -90,16 +90,59 @@ Average latency increases super-linearly with client count, suggesting contentio
 - **Detailed Analysis**: `detailed-out-of-order-analysis.csv` - Per-iteration metrics with percentile latencies
 - **Summary Analysis**: `summary-out-of-order-analysis.csv` - Aggregated statistics by client count
 
+## Resource Usage Analysis - Aggregator Approach (1 Client)
+
+### Performance Summary (30 Filtered Iterations)
+
+Based on comprehensive analysis of iterations 4-33, the aggregator approach demonstrates exceptional resource efficiency:
+
+| **Performance Metric** | **Value** | **Range** | **Std Dev** |
+|------------------------|-----------|-----------|-------------|
+| Events per iteration | 2,147 | 2,145-2,148 | ±1 |
+| Processing time | 198.35s | 197.58-198.95s | ±0.33s |
+| Throughput | 10.82 events/sec | 10.80-10.86 | ±0.02 |
+| System utilization | 9.69% | 5.27%-17.56% | ±3.10% |
+
+### Setup Phase Performance
+- **Query Registration**: 68.57ms ± 12.27ms (30 iterations)
+- **Query Preprocessing**: 54.53ms ± 11.71ms (30 iterations)
+- **Stream Subscription**: 176.56ms ± 24.71ms (30 iterations)
+
+### Event Processing Efficiency (64,402 total events)
+- **Event Preprocessing**: 0.29ms ± 0.46ms per event
+- **RSP Engine Adding**: 8.66ms ± 10.66ms per event
+- **GET Request Timing**: 14.90ms ± 21.71ms per request
+
+### Resource Efficiency Highlights
+1. **Extremely Stable Performance**: ±0.02 events/sec variance across 30 iterations
+2. **Low Resource Utilization**: 9.69% average system utilization with 90% headroom
+3. **Network Optimization**: 14.90ms average GET request time (vs 16.53ms without aggregator)
+4. **High Event Volume**: 64,402 events processed across 99.18 minutes
+5. **Predictable Runtime**: ~198 seconds per iteration with minimal variance
+
+### Comparison: Aggregator vs Without Aggregator
+| **Metric** | **With Aggregator** | **Without Aggregator** | **Improvement** |
+|------------|-------------------|---------------------|-----------------|
+| GET Request Time | 14.90ms ± 21.71ms | 16.53ms ± 24.76ms | **10% faster** |
+| Event Processing | 8.66ms ± 10.66ms | 9.19ms ± 11.45ms | **6% faster** |
+| Events/Iteration | 2,147 ± 1 | ~1,854 | **16% more** |
+| Throughput Stability | ±0.02 events/sec | Higher variance | **Much more stable** |
+
+The aggregator approach demonstrates superior resource efficiency with consistent performance, lower latency, and significantly improved stability compared to direct client connections.
+
 ## Analysis Methodology
 
-- **Data Source**: CSPARQLWindow.log files from 350 experimental iterations
+- **Data Source**: CSPARQLWindow.log files from 350 experimental iterations (out-of-order analysis) + Aggregator logs from 30 filtered iterations (resource analysis)
 - **Threshold**: 30,000ms (30 seconds) allowable out-of-order delay
+- **Resource Analysis**: Iterations 4-33 (filtered to exclude initialization and shutdown effects)
 - **Metrics Calculated**: 
   - Event counts and percentages
   - Latency statistics (mean, min, max, percentiles)
   - Threshold violation rates
   - Statistical distributions
+  - Resource utilization and throughput analysis
+  - Setup phase timing and event processing efficiency
 
 ---
 
-*Analysis conducted on September 9, 2025 using comprehensive log data from decentralized stream aggregator performance evaluation.*
+*Analysis conducted on September 9, 2025 (out-of-order analysis) and September 16, 2025 (resource usage analysis) using comprehensive log data from decentralized stream aggregator performance evaluation.*
