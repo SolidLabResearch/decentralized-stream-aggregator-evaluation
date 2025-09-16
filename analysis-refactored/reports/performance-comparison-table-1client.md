@@ -23,7 +23,7 @@ Based on detailed log analysis using cumulative time calculations between consec
 | Parsing / Extracting Timestamp | **< 1ms** | N.A | **< 1ms** |
 | Event Preprocessing | **0.24ms ± 0.46ms** | N.A | **0.29ms ± 0.46ms** *(64,402 events, 30 iterations)* |
 | Adding Event to RSP Engine | **9.19ms ± 11.45ms** | N.A | **8.66ms ± 10.66ms** *(64,402 events, 30 iterations)* |
-| Window Query Processing | N.A | N.A | **Variable (1912-5736 executions)** |
+| Window Query Processing | N.A | N.A | **45.1ms ± 25.7ms** *(3,263 avg executions, 1,912-5,736 range)* |
 | Receiving Aggregation Result | N.A | N.A | N.A |
 | | | | |
 | **Out of Order Metrics** | | | |

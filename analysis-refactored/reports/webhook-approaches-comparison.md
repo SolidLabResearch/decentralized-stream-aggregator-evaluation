@@ -7,7 +7,7 @@ You are absolutely right! Both approaches use **webhook-based notifications + GE
 ### **Without-Aggregator Approach:**
 1. ✅ **Direct webhook subscription** to LDES streams
 2. ✅ **Receives webhook notification** (HTTP POST)
-3. ✅ **Performs GET request** to fetch event data (`axios.get(resource_location)`)
+3. ✅ **Performs GET request** to fetch event data (`axios.get(resource_location)z`)
 4. ✅ **Measures GET request time** (`time_after_fetching - time_before_fetching = 16.53ms`)
 
 ### **With-Aggregator Approach:**
