@@ -50,9 +50,15 @@ shell_quote() {
 client_pid_file="$evaluation_path/.4hz-$approach-launcher.pid"
 client_launch_command() {
   local iteration_output_dir="$1" iteration_run_id="$2"
-  printf 'cd "%s" && (EXPERIMENT_CONFIG_PATH=%s EXPERIMENT_RUN_ID=%s EVALUATION_REPOSITORY_SHA=%s npx ts-node %s --output-dir %s & echo $! > "%s"; wait $!)' \
-    "$evaluation_path" "$(shell_quote "$client_config_path")" "$(shell_quote "$iteration_run_id")" \
-    "$(shell_quote "$evaluation_sha")" "$(shell_quote "$launcher")" "$(shell_quote "$iteration_output_dir")" "$client_pid_file"
+  if [[ "$approach" == "without-aggregator" ]]; then
+    printf 'cd "%s" && (setsid env EXPERIMENT_CONFIG_PATH=%s EXPERIMENT_RUN_ID=%s EVALUATION_REPOSITORY_SHA=%s npx ts-node %s --output-dir %s > "%s/client-launcher.log" 2>&1 & client_pid=\$!; printf '\''%%s\\n'\'' "\$client_pid" > "%s"; wait "\$client_pid")' \
+      "$evaluation_path" "$(shell_quote "$client_config_path")" "$(shell_quote "$iteration_run_id")" \
+      "$(shell_quote "$evaluation_sha")" "$(shell_quote "$launcher")" "$(shell_quote "$iteration_output_dir")" "$iteration_output_dir" "$client_pid_file"
+  else
+    printf 'cd "%s" && (EXPERIMENT_CONFIG_PATH=%s EXPERIMENT_RUN_ID=%s EVALUATION_REPOSITORY_SHA=%s npx ts-node %s --output-dir %s & echo \$! > "%s"; wait \$!)' \
+      "$evaluation_path" "$(shell_quote "$client_config_path")" "$(shell_quote "$iteration_run_id")" \
+      "$(shell_quote "$evaluation_sha")" "$(shell_quote "$launcher")" "$(shell_quote "$iteration_output_dir")" "$client_pid_file"
+  fi
 }
 
 replayer_runtime_root="$replayer_path/.evaluation-runtime/$run_id"
@@ -74,6 +80,10 @@ heimdall_query_ready_command() {
 }
 heimdall_first_result_ready_command() {
   csv_operation_count_command "$1" "r2r_first_result"
+}
+without_aggregator_first_result_ready_command() {
+  local iteration_dir="$1"
+  printf 'iteration_dir=%s; for csv in "\$iteration_dir"/client-*-operations.csv; do test -f "\$csv" && awk -F, '\''NR == 1 { for (i = 1; i <= NF; i++) if ($i == "operation") operation_column = i; next } operation_column && $operation_column == "r2r_first_result" { found=1 } END { exit !found }'\'' "\$csv" && exit 0; done; exit 1' "$(remote_path_expression "$evaluation_path/$iteration_dir")"
 }
 print_plan() {
   echo "approach=$approach frequencyHz=$frequency clientCount=$client_count iterations=$iterations durationSeconds=$duration"
@@ -109,9 +119,12 @@ remote_check() {
 }
 port_listening_command='if command -v ss >/dev/null; then ss -ltn "sport = :8080"; elif command -v netstat >/dev/null; then netstat -ltn 2>/dev/null | grep ":8080" || true; else echo "no-port-tool"; fi'
 wait_for_command() {
-  local label="$1" command="$2" timeout="$3" interval="${4:-1}" start=$SECONDS
+  wait_for_command_on_host "$1" "$service_host" "$2" "$3" "${4:-1}"
+}
+wait_for_command_on_host() {
+  local label="$1" host="$2" command="$3" timeout="$4" interval="${5:-1}" start=$SECONDS
   while (( SECONDS - start < timeout )); do
-    if experiment_ssh "$service_host" "$command"; then return 0; fi
+    if experiment_ssh "$host" "$command"; then return 0; fi
     sleep "$interval"
   done
   echo "$label did not become ready within ${timeout}s." >&2; return 1
@@ -139,7 +152,11 @@ if [[ "$mode" == "--preflight" ]]; then
 fi
 for command in "$solid_initialize" "$solid_cleanup" "$replayer_start" "$service_start"; do if command_required "$command"; then echo "Set ${command#<} before running." >&2; exit 2; fi; done
 cleanup() {
-  experiment_ssh "$client_host" "if test -f \"$client_pid_file\"; then kill -TERM \$(cat \"$client_pid_file\") 2>/dev/null || true; rm -f \"$client_pid_file\"; fi" || true
+  if [[ "$approach" == "without-aggregator" ]]; then
+    experiment_ssh "$client_host" "if test -f \"$client_pid_file\"; then pid=\$(cat \"$client_pid_file\" 2>/dev/null || true); if test -n \"\$pid\" && kill -0 -- \"-\$pid\" 2>/dev/null; then kill -TERM -- \"-\$pid\" 2>/dev/null || kill -TERM \"\$pid\" 2>/dev/null || true; for attempt in 1 2 3 4 5; do status=\$(kill -0 -- \"-\$pid\" 2>/dev/null && echo alive || true); if test -z \"\$status\"; then break; fi; sleep 1; done; status=\$(kill -0 -- \"-\$pid\" 2>/dev/null && echo alive || true); if test -n \"\$status\"; then kill -KILL -- \"-\$pid\" 2>/dev/null || kill -KILL \"\$pid\" 2>/dev/null || true; fi; fi; rm -f \"$client_pid_file\"; fi" || true
+  else
+    experiment_ssh "$client_host" "if test -f \"$client_pid_file\"; then kill -TERM \$(cat \"$client_pid_file\") 2>/dev/null || true; rm -f \"$client_pid_file\"; fi" || true
+  fi
   if [[ "$approach" == "heimdall" ]]; then
     experiment_ssh "$service_host" "if test -f \"$heimdall_pid_file\"; then pid=\$(cat \"$heimdall_pid_file\" 2>/dev/null || true); if test -n \"\$pid\" && kill -0 \"\$pid\" 2>/dev/null; then kill -TERM -- \"-\$pid\" 2>/dev/null || kill -TERM \"\$pid\" 2>/dev/null || true; for attempt in 1 2 3 4 5; do status=\$(ps -o stat= -p \"\$pid\" 2>/dev/null | tr -d ' ' || true); if test -z \"\$status\" || [[ \"\$status\" == Z* ]]; then break; fi; sleep 1; done; status=\$(ps -o stat= -p \"\$pid\" 2>/dev/null | tr -d ' ' || true); if test -n \"\$status\" && [[ \"\$status\" != Z* ]]; then kill -KILL -- \"-\$pid\" 2>/dev/null || kill -KILL \"\$pid\" 2>/dev/null || true; fi; fi; rm -f \"$heimdall_pid_file\"; status=\$(ps -o stat= -p \"\$pid\" 2>/dev/null | tr -d ' ' || true); if test -n \"\$status\" && [[ \"\$status\" != Z* ]]; then echo \"Heimdall run PID \$pid is still running after cleanup.\" >&2; exit 1; fi; fi"
   fi
@@ -167,6 +184,8 @@ for iteration in $(seq 1 "$iterations"); do
   experiment_ssh "$replayer_host" "$replayer_launch_command" >"$root/$iteration_dir/replayer.log" 2>&1 & replayer_pid=$!
   if [[ "$approach" == "heimdall" && "${EXPERIMENT_STOP_AFTER_FIRST_WINDOW:-false}" == "true" ]]; then
     wait_for_command "first Heimdall R2R result" "$(heimdall_first_result_ready_command "$service_iteration_dir/window-processing.csv")" "$duration" "${EXPERIMENT_FIRST_WINDOW_POLL_INTERVAL_SECONDS:-1}" || { echo "No r2r_first_result appeared within ${duration}s after replay started." >&2; exit 1; }
+  elif [[ "$approach" == "without-aggregator" && "${EXPERIMENT_STOP_AFTER_FIRST_WINDOW:-false}" == "true" ]]; then
+    wait_for_command_on_host "first without-aggregator R2R result" "$client_host" "$(without_aggregator_first_result_ready_command "$iteration_dir")" "$duration" "${EXPERIMENT_FIRST_WINDOW_POLL_INTERVAL_SECONDS:-1}" || { echo "No client r2r_first_result appeared within ${duration}s after replay started." >&2; exit 1; }
   else
     sleep "$duration"
   fi

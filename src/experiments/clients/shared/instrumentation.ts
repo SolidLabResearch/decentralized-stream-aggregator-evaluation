@@ -9,16 +9,17 @@ export const MAX_OUT_OF_ORDERNESS_MS = 30_000;
 export type Operation = "service_discovery" | "stream_discovery" | "query_reuse_check" |
     "service_authentication" | "service_authorization" | "query_registration" |
     "stream_subscription" | "websocket_message" | "event_retrieval" |
-    "parsing_timestamp_extraction" | "rsp_insertion" | "window_query_processing" |
+    "parsing_timestamp_extraction" | "rsp_insertion" | "r2r_first_result" | "window_query_processing" |
     "result_delivery";
 
 export interface Context { runId: string; approach: string; clientId: string; queryId: string; }
 export interface Timing extends Partial<Pick<Context, "queryId">> {
     eventId?: string; streamId?: string; operation: Operation; startEpochMs: number;
     endEpochMs: number; startMonotonicNs: bigint; endMonotonicNs: bigint;
+    windowId?: string; windowFromMs?: number; windowToMs?: number; windowSize?: number;
 }
 
-const timingHeader = "run_id,approach,client_id,query_id,event_id,stream_id,operation,start_epoch_ms,end_epoch_ms,start_monotonic_ns,end_monotonic_ns,duration_ms\n";
+const timingHeader = "run_id,approach,client_id,query_id,event_id,stream_id,window_id,window_from_ms,window_to_ms,window_size,operation,start_epoch_ms,end_epoch_ms,start_monotonic_ns,end_monotonic_ns,duration_ms\n";
 const oooHeader = "run_id,approach,client_id,query_id,event_id,stream_id,out_of_order,lateness_ms,within_bound,max_out_of_orderness_ms\n";
 
 function csv(value: string | number | boolean | bigint | undefined): string {
@@ -47,14 +48,14 @@ export class RawInstrumentation {
     }
     public write(timing: Timing): void {
         const duration = Number(timing.endMonotonicNs - timing.startMonotonicNs) / 1_000_000;
-        this.timings.write([this.context.runId, this.context.approach, this.context.clientId, timing.queryId ?? this.context.queryId, timing.eventId, timing.streamId, timing.operation, timing.startEpochMs, timing.endEpochMs, timing.startMonotonicNs, timing.endMonotonicNs, duration].map(csv).join(",") + "\n");
+        this.timings.write([this.context.runId, this.context.approach, this.context.clientId, timing.queryId ?? this.context.queryId, timing.eventId, timing.streamId, timing.windowId, timing.windowFromMs, timing.windowToMs, timing.windowSize, timing.operation, timing.startEpochMs, timing.endEpochMs, timing.startMonotonicNs, timing.endMonotonicNs, duration].map(csv).join(",") + "\n");
     }
     public rspMetric(event: string, metric: any): void {
         if (event === "out_of_order_event") {
             this.ooo.write([this.context.runId, this.context.approach, this.context.clientId, this.context.queryId, metric.event_id, metric.stream_id, metric.out_of_order, metric.lateness_ms, metric.within_bound, metric.max_out_of_orderness_ms].map(csv).join(",") + "\n");
-        } else if (event === "rsp_insertion" || event === "window_query_processing") {
+        } else if (event === "rsp_insertion" || event === "r2r_first_result" || event === "window_query_processing") {
             const start = BigInt(metric.start_monotonic_ns); const end = BigInt(metric.end_monotonic_ns);
-            this.write({ operation: event, eventId: metric.event_id, streamId: metric.stream_id, startEpochMs: this.epochFor(start), endEpochMs: this.epochFor(end), startMonotonicNs: start, endMonotonicNs: end });
+            this.write({ operation: event, eventId: metric.event_id, streamId: metric.stream_id, windowId: metric.window_id, windowFromMs: metric.window_from_ms, windowToMs: metric.window_to_ms, windowSize: metric.window_size, startEpochMs: this.epochFor(start), endEpochMs: this.epochFor(end), startMonotonicNs: start, endMonotonicNs: end });
         }
     }
     public async close(): Promise<void> {
