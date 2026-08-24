@@ -3,3 +3,8 @@ pods/.internal
 node_modules
 dist/
 logs/
+/initialization-benchmark.csv
+/initialization-smoke.csv
+/initialization-analysis/
+.env
+.env.*

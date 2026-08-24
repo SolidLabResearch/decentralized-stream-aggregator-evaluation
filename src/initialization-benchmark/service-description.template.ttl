@@ -1,0 +1,6 @@
+@prefix schema: <https://schema.org/> .
+@prefix heimdall: <https://w3id.org/heimdall#> .
+
+<#heimdall> a schema:Service ;
+    schema:name "Heimdall" ;
+    heimdall:webSocketEndpoint <__HEIMDALL_WEBSOCKET_ENDPOINT__> .

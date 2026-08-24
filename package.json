@@ -2,10 +2,17 @@
   "scripts": {
     "check:experiments": "tsc --project tsconfig.experiments.json --noEmit",
     "test:experiments": "ts-node test/initialise-LDES.test.ts",
+    "test:initialization-benchmark": "node test/initialization-benchmark.test.js",
+    "benchmark:init": "node src/initialization-benchmark/benchmark.js",
+    "benchmark:init:smoke": "node src/initialization-benchmark/benchmark.js --smoke",
+    "benchmark:init:provision": "node src/initialization-benchmark/provision-service-description.js",
+    "analyze:initialization-benchmark": "node src/initialization-benchmark/analyze.js",
     "test:component-latency": "node analysis/component-latency/test.js",
     "analyze:component-latency": "node analysis/component-latency/analyze.js"
   },
   "dependencies": {
+    "@inrupt/solid-client-authn-core": "^1.17.5",
+    "@rubensworks/solid-client-authn-isomorphic": "^2.0.1",
     "@solid/community-server": "^7.0.1",
     "@treecg/versionawareldesinldp": "^0.3.0",
     "@types/benchmark": "^2.1.5",
@@ -20,6 +27,7 @@
     "dotenv": "^16.3.1",
     "ldfetch": "^1.2.8",
     "log4js": "^6.9.1",
+    "n3": "^1.17.0",
     "pcap": "^3.1.0",
     "pidusage": "^3.0.2",
     "rate-limited-ldp-communication": "^1.0.5",
