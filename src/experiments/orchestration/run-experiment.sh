@@ -53,6 +53,19 @@ replayer_start_quoted="$(shell_quote "$replayer_start")"
 replayer_launch_command="mkdir -p \"$replayer_runtime_root\" || exit 1; setsid bash -c $replayer_start_quoted > \"$replayer_log_file\" 2>&1 & replayer_pid=\$!; printf '%s\\n' \"\$replayer_pid\" > \"$replayer_pid_file\"; wait \"\$replayer_pid\""
 heimdall_start_quoted="$(shell_quote "$service_start")"
 heimdall_launch_command="mkdir -p \"$service_results_root\" \"$service_iteration_dir\" || exit 1; setsid bash -c $heimdall_start_quoted > \"$service_iteration_dir/heimdall.log\" 2>&1 & heimdall_pid=\$!; printf '%s\\n' \"\$heimdall_pid\" > \"$heimdall_pid_file\"; wait \"\$heimdall_pid\""
+csv_operation_count_command() {
+  local csv_path="$1" operation="$2"
+  printf 'test -f %s && awk -F, '\''NR == 1 { for (i = 1; i <= NF; i++) if ($i == "operation") operation_column = i; next } operation_column && $operation_column == "%s" { count++ } END { exit !(count >= 1) }'\'' %s' \
+    "$(shell_quote "$csv_path")" "$operation" "$(shell_quote "$csv_path")"
+}
+heimdall_query_ready_command() {
+  local initialization_csv="$1"
+  printf 'test -f %s && awk -F, '\''NR == 1 { for (i = 1; i <= NF; i++) if ($i == "operation") operation_column = i; next } operation_column && $operation_column == "query_registration" { query_registration++ } operation_column && $operation_column == "stream_subscription" { stream_subscription++ } END { exit !(query_registration >= 1 && stream_subscription >= 3) }'\'' %s' \
+    "$(shell_quote "$initialization_csv")" "$(shell_quote "$initialization_csv")"
+}
+heimdall_window_ready_command() {
+  csv_operation_count_command "$1" "window_query_processing"
+}
 print_plan() {
   echo "approach=$approach frequencyHz=$frequency clientCount=$client_count iterations=$iterations durationSeconds=$duration"
   echo "ssh=user:$SSH_USER bastion:${SSH_BASTION:-none} identity:${SSH_IDENTITY_FILE:+configured} timeout:${SSH_CONNECT_TIMEOUT_SECONDS}s"
@@ -70,6 +83,8 @@ print_plan() {
     echo "heimdall: $(experiment_ssh_preview "$service_host" "$heimdall_launch_command")"
     echo "heimdall-results: $service_iteration_dir"
     echo "heimdall-pid: $heimdall_pid_file"
+    echo "heimdall-query-readiness: query_registration >= 1 and stream_subscription >= 3 (timeout=${HEIMDALL_QUERY_READY_TIMEOUT_SECONDS:-30}s)"
+    echo "heimdall-stop-mode: ${EXPERIMENT_STOP_AFTER_FIRST_WINDOW:-false} (poll=${EXPERIMENT_FIRST_WINDOW_POLL_INTERVAL_SECONDS:-1}s)"
   else echo "service: $(experiment_ssh_preview "$service_host" "$service_start")"; fi
   echo "clients: $(experiment_ssh_preview "$client_host" "$(client_launch_command "$output_root/iteration-XX" "$run_id")")"
   echo "replayer: $(experiment_ssh_preview "$replayer_host" "$replayer_launch_command")"
@@ -83,10 +98,10 @@ remote_check() {
 }
 port_listening_command='if command -v ss >/dev/null; then ss -ltn "sport = :8080"; elif command -v netstat >/dev/null; then netstat -ltn 2>/dev/null | grep ":8080" || true; else echo "no-port-tool"; fi'
 wait_for_command() {
-  local label="$1" command="$2" timeout="$3" elapsed=0
-  while (( elapsed < timeout )); do
+  local label="$1" command="$2" timeout="$3" interval="${4:-1}" start=$SECONDS
+  while (( SECONDS - start < timeout )); do
     if experiment_ssh "$service_host" "$command"; then return 0; fi
-    sleep 1; ((elapsed+=1))
+    sleep "$interval"
   done
   echo "$label did not become ready within ${timeout}s." >&2; return 1
 }
@@ -134,8 +149,16 @@ for iteration in $(seq 1 "$iterations"); do
   fi
   if [[ "$approach" == "heimdall" ]]; then wait_for_command "Heimdall /health" "curl --fail --silent --show-error http://127.0.0.1:8080/health >/dev/null" "${HEIMDALL_READY_TIMEOUT_SECONDS:-30}"; elif [[ "$service_host" != "none" ]]; then sleep "${SERVICE_STARTUP_SECONDS:-15}"; fi
   experiment_ssh "$client_host" "$(client_launch_command "$iteration_dir" "$run_id-$(printf '%02d' "$iteration")")" >"$root/$iteration_dir/client-launcher.log" 2>&1 & client_pid=$!
+  if [[ "$approach" == "heimdall" ]]; then
+    wait_for_command "Heimdall query/subscription readiness" "$(heimdall_query_ready_command "$service_iteration_dir/initialization.csv")" "${HEIMDALL_QUERY_READY_TIMEOUT_SECONDS:-30}" || { echo "Heimdall query readiness failed; replayer will not be started." >&2; exit 1; }
+  fi
   experiment_ssh "$replayer_host" "$replayer_launch_command" >"$root/$iteration_dir/replayer.log" 2>&1 & replayer_pid=$!
-  sleep "$duration"; cleanup
+  if [[ "$approach" == "heimdall" && "${EXPERIMENT_STOP_AFTER_FIRST_WINDOW:-false}" == "true" ]]; then
+    wait_for_command "first completed Heimdall window evaluation" "$(heimdall_window_ready_command "$service_iteration_dir/window-processing.csv")" "$duration" "${EXPERIMENT_FIRST_WINDOW_POLL_INTERVAL_SECONDS:-1}" || { echo "No completed Heimdall window evaluation appeared within ${duration}s after replay started." >&2; exit 1; }
+  else
+    sleep "$duration"
+  fi
+  cleanup
   pids=("$client_pid" "$replayer_pid"); if [[ -n "$service_pid" ]]; then pids+=("$service_pid"); fi
   kill "${pids[@]}" 2>/dev/null || true; wait "${pids[@]}" 2>/dev/null || true
   experiment_scp_from "$client_host" "$evaluation_path/$iteration_dir" "$root/$output_root/"
