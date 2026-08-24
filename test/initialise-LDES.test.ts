@@ -33,6 +33,7 @@ assert.match(normalizedDryRun, /heimdall-results: .*\.evaluation-results\/dry-ru
 assert.match(normalizedDryRun, /heimdall-pid: .*\.evaluation-results\/dry-run-test\/heimdall\.pid/);
 assert.match(normalizedDryRun, /expected-shas: .*replayer=a98ec1cba14f4437bb0bbefd915fb07e79a454fe/);
 assert.match(normalizedDryRun, /expected-shas: .*heimdall=a6dbbba45f7d764355e010e4b5e3b82fd2795778/);
+assert.match(normalizedDryRun, /expected-shas: .*rspJs=97a8865a3225a0699705d4f8cf7359ba6dd04611/);
 assert.match(normalizedDryRun, /clients: .*EXPERIMENT_CONFIG_PATH='\/home\/test\/experiment-config\.n079\.json'/);
 assert.match(normalizedDryRun, /clients: .*EXPERIMENT_RUN_ID='dry-run-test'.*EVALUATION_REPOSITORY_SHA=/);
 assert.match(normalizedDryRun, /mkdir -p ".*\.evaluation-results\/dry-run-test" ".*\.evaluation-results\/dry-run-test\/iteration-XX" .*setsid/);
