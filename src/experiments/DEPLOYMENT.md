@@ -21,6 +21,7 @@ No key, password, or host-specific command belongs in version control.
 
 Before an experiment, supply the deployment-specific commands as environment
 variables: `SOLID_CLEANUP_COMMAND`, `SOLID_INITIALIZE_COMMAND`,
+`HEIMDALL_SOLID_START_COMMAND`, `HEIMDALL_SOLID_READY_COMMAND`,
 `HEIMDALL_START_COMMAND`, and `REPLAYER_START_COMMAND` (plus the notification
 aggregator command when relevant). Review `--preflight` and `--dry-run` before
 any mutating run.

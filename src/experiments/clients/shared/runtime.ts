@@ -34,7 +34,7 @@ export function launchConfiguredClients(approach: Approach, clientModule: string
         resourceSamplingIntervalMs: config.experiment.resourceSamplingIntervalMs, startTimestamp: new Date().toISOString(),
         hosts: config.hosts, streams: config.streams, serviceUrls: config.urls, nodeVersion: process.version,
         queryText: query, queryHash: sha256(query), evaluationRepositorySha: process.env.EVALUATION_REPOSITORY_SHA || "unknown",
-        rspJsSha: "45112d2955b99796d234747db34bd6804939e69a", heimdallSha: approach === "heimdall" ? "2f520430a8a9312f265c30a5b11e5a9cbfad429b" : undefined,
+        rspJsSha: "45112d2955b99796d234747db34bd6804939e69a", heimdallSha: approach === "heimdall" ? "5fca4fb5b35f5626e1cd382667920552f03d550a" : undefined,
         max_out_of_orderness_ms: 30000, clockSynchronization: { status: "unverified", crossMachineMetrics: "unavailable until pre-run clock evidence is collected" }
     }, null, 2) + "\n");
     const children: ChildProcess[] = [];
