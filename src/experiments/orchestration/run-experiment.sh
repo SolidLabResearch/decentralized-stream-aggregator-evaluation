@@ -17,7 +17,7 @@ SSH_USER="${EXPERIMENT_SSH_USER:-$(read_config 'c.ssh.user')}"; SSH_BASTION="${E
 SSH_IDENTITY_FILE="${EXPERIMENT_SSH_IDENTITY_FILE:-$(read_config 'c.ssh.identityFile === null ? "" : c.ssh.identityFile')}"; SSH_CONNECT_TIMEOUT_SECONDS="${EXPERIMENT_SSH_CONNECT_TIMEOUT_SECONDS:-$(read_config 'c.ssh.connectTimeoutSeconds')}"
 experiment_ssh_args
 evaluation_path="$(experiment_remote_path "$(read_config 'c.remotePaths.evaluation')")"; heimdall_path="$(experiment_remote_path "$(read_config 'c.remotePaths.heimdall')")"; rsp_js_path="$(experiment_remote_path "$(read_config 'c.remotePaths.rspJs')")"; replayer_path="$(experiment_remote_path "$(read_config 'c.remotePaths.replayer')")"
-evaluation_sha="$(git rev-parse HEAD)"; heimdall_sha="575f1614aeb0841f6b4874b6e069a76b1db998b2"; rsp_js_sha="45112d2955b99796d234747db34bd6804939e69a"; replayer_sha="a98ec1cba14f4437bb0bbefd915fb07e79a454fe"
+evaluation_sha="$(git rev-parse HEAD)"; heimdall_sha="bd18f13ebc3568bac76750f74693cecf6d217b74"; rsp_js_sha="45112d2955b99796d234747db34bd6804939e69a"; replayer_sha="a98ec1cba14f4437bb0bbefd915fb07e79a454fe"
 launcher="src/experiments/clients/$approach/launcher.ts"; run_id="${EXPERIMENT_RUN_ID:-$(date -u +%Y%m%dT%H%M%SZ)}"; output_root="results/4hz/$approach/clients-$client_count/run-$run_id"
 client_config_path="${EXPERIMENT_CLIENT_CONFIG_PATH:-}"
 solid_initialize="cd \"$evaluation_path\" && EXPERIMENT_CONFIG_PATH=\"$client_config_path\" npx ts-node initialise-LDES.ts"; solid_cleanup="${SOLID_CLEANUP_COMMAND:-<SOLID_CLEANUP_COMMAND is required>}"; replayer_start="${REPLAYER_START_COMMAND:-<REPLAYER_START_COMMAND is required>}"
@@ -37,6 +37,13 @@ command_required() { [[ "$1" == "<"*" is required>" ]]; }
 shell_quote() {
   local value="$1"
   printf "'%s'" "${value//\'/\'\\\'\'}"
+}
+client_pid_file="$evaluation_path/.4hz-$approach-launcher.pid"
+client_launch_command() {
+  local iteration_output_dir="$1" iteration_run_id="$2"
+  printf 'cd "%s" && (EXPERIMENT_CONFIG_PATH=%s EXPERIMENT_RUN_ID=%s EVALUATION_REPOSITORY_SHA=%s npx ts-node %s --output-dir %s & echo $! > "%s"; wait $!)' \
+    "$evaluation_path" "$(shell_quote "$client_config_path")" "$(shell_quote "$iteration_run_id")" \
+    "$(shell_quote "$evaluation_sha")" "$(shell_quote "$launcher")" "$(shell_quote "$iteration_output_dir")" "$client_pid_file"
 }
 
 replayer_runtime_root="$replayer_path/.evaluation-runtime/$run_id"
@@ -64,7 +71,7 @@ print_plan() {
     echo "heimdall-results: $service_iteration_dir"
     echo "heimdall-pid: $heimdall_pid_file"
   else echo "service: $(experiment_ssh_preview "$service_host" "$service_start")"; fi
-  echo "clients: $(experiment_ssh_preview "$client_host" "cd \"$evaluation_path\" && npx ts-node '$launcher' --output-dir '$output_root/iteration-XX'")"
+  echo "clients: $(experiment_ssh_preview "$client_host" "$(client_launch_command "$output_root/iteration-XX" "$run_id")")"
   echo "replayer: $(experiment_ssh_preview "$replayer_host" "$replayer_launch_command")"
   echo "collect: $(experiment_scp_preview "$client_host" "$evaluation_path/$output_root/iteration-XX" "$root/$output_root/")"
   if [[ "$approach" == "heimdall" ]]; then echo "collect-service: $(experiment_scp_preview "$service_host" "$service_results_root/iteration-XX" "$root/$output_root/iteration-XX/service")"; fi
@@ -104,7 +111,6 @@ if [[ "$mode" == "--preflight" ]]; then
   exit "$failures"
 fi
 for command in "$solid_initialize" "$solid_cleanup" "$replayer_start" "$service_start"; do if command_required "$command"; then echo "Set ${command#<} before running." >&2; exit 2; fi; done
-client_pid_file="$evaluation_path/.4hz-$approach-launcher.pid"
 cleanup() {
   experiment_ssh "$client_host" "if test -f \"$client_pid_file\"; then kill -TERM \$(cat \"$client_pid_file\") 2>/dev/null || true; rm -f \"$client_pid_file\"; fi" || true
   if [[ "$approach" == "heimdall" ]]; then
@@ -127,7 +133,7 @@ for iteration in $(seq 1 "$iterations"); do
     else experiment_ssh "$service_host" "$service_start" >"$root/$iteration_dir/$approach.log" 2>&1 & service_pid=$!; fi
   fi
   if [[ "$approach" == "heimdall" ]]; then wait_for_command "Heimdall /health" "curl --fail --silent --show-error http://127.0.0.1:8080/health >/dev/null" "${HEIMDALL_READY_TIMEOUT_SECONDS:-30}"; elif [[ "$service_host" != "none" ]]; then sleep "${SERVICE_STARTUP_SECONDS:-15}"; fi
-  experiment_ssh "$client_host" "cd \"$evaluation_path\" && (EXPERIMENT_RUN_ID='$run_id-$(printf '%02d' "$iteration")' EVALUATION_REPOSITORY_SHA='$(git rev-parse HEAD)' npx ts-node '$launcher' --output-dir '$iteration_dir' & echo \$! > \"$client_pid_file\"; wait \$!)" >"$root/$iteration_dir/client-launcher.log" 2>&1 & client_pid=$!
+  experiment_ssh "$client_host" "$(client_launch_command "$iteration_dir" "$run_id-$(printf '%02d' "$iteration")")" >"$root/$iteration_dir/client-launcher.log" 2>&1 & client_pid=$!
   experiment_ssh "$replayer_host" "$replayer_launch_command" >"$root/$iteration_dir/replayer.log" 2>&1 & replayer_pid=$!
   sleep "$duration"; cleanup
   pids=("$client_pid" "$replayer_pid"); if [[ -n "$service_pid" ]]; then pids+=("$service_pid"); fi

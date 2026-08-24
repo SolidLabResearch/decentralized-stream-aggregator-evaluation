@@ -32,6 +32,9 @@ const normalizedDryRun = dryRun.replace(/\\(.)/g, "$1");
 assert.match(normalizedDryRun, /heimdall-results: .*\.evaluation-results\/dry-run-test\/iteration-XX/);
 assert.match(normalizedDryRun, /heimdall-pid: .*\.evaluation-results\/dry-run-test\/heimdall\.pid/);
 assert.match(normalizedDryRun, /expected-shas: .*replayer=a98ec1cba14f4437bb0bbefd915fb07e79a454fe/);
+assert.match(normalizedDryRun, /expected-shas: .*heimdall=bd18f13ebc3568bac76750f74693cecf6d217b74/);
+assert.match(normalizedDryRun, /clients: .*EXPERIMENT_CONFIG_PATH='\/home\/test\/experiment-config\.n079\.json'/);
+assert.match(normalizedDryRun, /clients: .*EXPERIMENT_RUN_ID='dry-run-test'.*EVALUATION_REPOSITORY_SHA=/);
 assert.match(normalizedDryRun, /mkdir -p ".*\.evaluation-results\/dry-run-test" ".*\.evaluation-results\/dry-run-test\/iteration-XX" .*setsid/);
 assert.match(normalizedDryRun, /setsid bash -c .*& replayer_pid=.*replayer\.pid/);
 assert.match(normalizedDryRun, /setsid bash -c .*& heimdall_pid=.*heimdall\.pid/);
@@ -44,5 +47,8 @@ assert.match(normalizedDryRun, /cleanup-pids: heimdall=.*\.evaluation-results\/d
 assert.doesNotMatch(normalizedDryRun, /collect-service: .*n079-09[^:]*:\$HOME\/experiments\/decentralized-stream-aggregator-evaluation/);
 assert.match(runnerSource, /kill -TERM --/);
 assert.match(runnerSource, /replayer_pid_file/);
+assert.match(runnerSource, /client_launch_command\(\)\s*\{/);
+assert.match(runnerSource, /EXPERIMENT_CONFIG_PATH=%s/);
+assert.match(runnerSource, /client_launch_command "\$iteration_dir"/);
 assert.doesNotMatch(runnerSource, /\b(pkill|killall)\b/);
 console.log("initialise-LDES n079 configuration test passed");
