@@ -17,7 +17,7 @@ SSH_USER="${EXPERIMENT_SSH_USER:-$(read_config 'c.ssh.user')}"; SSH_BASTION="${E
 SSH_IDENTITY_FILE="${EXPERIMENT_SSH_IDENTITY_FILE:-$(read_config 'c.ssh.identityFile === null ? "" : c.ssh.identityFile')}"; SSH_CONNECT_TIMEOUT_SECONDS="${EXPERIMENT_SSH_CONNECT_TIMEOUT_SECONDS:-$(read_config 'c.ssh.connectTimeoutSeconds')}"
 experiment_ssh_args
 evaluation_path="$(experiment_remote_path "$(read_config 'c.remotePaths.evaluation')")"; heimdall_path="$(experiment_remote_path "$(read_config 'c.remotePaths.heimdall')")"; rsp_js_path="$(experiment_remote_path "$(read_config 'c.remotePaths.rspJs')")"; replayer_path="$(experiment_remote_path "$(read_config 'c.remotePaths.replayer')")"
-evaluation_sha="$(git rev-parse HEAD)"; heimdall_sha="bd18f13ebc3568bac76750f74693cecf6d217b74"; rsp_js_sha="45112d2955b99796d234747db34bd6804939e69a"; replayer_sha="a98ec1cba14f4437bb0bbefd915fb07e79a454fe"
+evaluation_sha="$(git rev-parse HEAD)"; heimdall_sha="a6dbbba45f7d764355e010e4b5e3b82fd2795778"; rsp_js_sha="45112d2955b99796d234747db34bd6804939e69a"; replayer_sha="a98ec1cba14f4437bb0bbefd915fb07e79a454fe"
 launcher="src/experiments/clients/$approach/launcher.ts"; run_id="${EXPERIMENT_RUN_ID:-$(date -u +%Y%m%dT%H%M%SZ)}"; output_root="results/4hz/$approach/clients-$client_count/run-$run_id"
 client_config_path="${EXPERIMENT_CLIENT_CONFIG_PATH:-}"
 solid_initialize="cd \"$evaluation_path\" && EXPERIMENT_CONFIG_PATH=\"$client_config_path\" npx ts-node initialise-LDES.ts"; solid_cleanup="${SOLID_CLEANUP_COMMAND:-<SOLID_CLEANUP_COMMAND is required>}"; replayer_start="${REPLAYER_START_COMMAND:-<REPLAYER_START_COMMAND is required>}"

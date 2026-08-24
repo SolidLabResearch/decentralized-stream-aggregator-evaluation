@@ -32,7 +32,7 @@ const normalizedDryRun = dryRun.replace(/\\(.)/g, "$1");
 assert.match(normalizedDryRun, /heimdall-results: .*\.evaluation-results\/dry-run-test\/iteration-XX/);
 assert.match(normalizedDryRun, /heimdall-pid: .*\.evaluation-results\/dry-run-test\/heimdall\.pid/);
 assert.match(normalizedDryRun, /expected-shas: .*replayer=a98ec1cba14f4437bb0bbefd915fb07e79a454fe/);
-assert.match(normalizedDryRun, /expected-shas: .*heimdall=bd18f13ebc3568bac76750f74693cecf6d217b74/);
+assert.match(normalizedDryRun, /expected-shas: .*heimdall=a6dbbba45f7d764355e010e4b5e3b82fd2795778/);
 assert.match(normalizedDryRun, /clients: .*EXPERIMENT_CONFIG_PATH='\/home\/test\/experiment-config\.n079\.json'/);
 assert.match(normalizedDryRun, /clients: .*EXPERIMENT_RUN_ID='dry-run-test'.*EVALUATION_REPOSITORY_SHA=/);
 assert.match(normalizedDryRun, /mkdir -p ".*\.evaluation-results\/dry-run-test" ".*\.evaluation-results\/dry-run-test\/iteration-XX" .*setsid/);
