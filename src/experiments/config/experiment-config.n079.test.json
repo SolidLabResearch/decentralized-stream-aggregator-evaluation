@@ -3,7 +3,7 @@
     "frequencyHz": 4,
     "clientCount": 1,
     "iterations": 1,
-    "durationSeconds": 1,
+    "durationSeconds": 30,
     "resourceSamplingIntervalMs": 500
   },
   "ssh": {
