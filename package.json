@@ -1,6 +1,7 @@
 {
   "scripts": {
     "check:experiments": "tsc --project tsconfig.experiments.json --noEmit",
+    "test:experiments": "ts-node test/initialise-LDES.test.ts",
     "test:component-latency": "node analysis/component-latency/test.js",
     "analyze:component-latency": "node analysis/component-latency/analyze.js"
   },

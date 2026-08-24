@@ -1,0 +1,39 @@
+{
+  "experiment": {
+    "frequencyHz": 4,
+    "clientCount": 1,
+    "iterations": 1,
+    "durationSeconds": 1,
+    "resourceSamplingIntervalMs": 500
+  },
+  "ssh": {
+    "user": "test",
+    "bastion": null,
+    "identityFile": null,
+    "connectTimeoutSeconds": 1
+  },
+  "hosts": {
+    "replayer": "n079-07.wall1.ilabt.imec.be",
+    "solidPod": "n079-11.wall1.ilabt.imec.be",
+    "client": "n079-02.wall1.ilabt.imec.be",
+    "heimdall": "n079-09.wall1.ilabt.imec.be",
+    "notificationAggregator": "n079-09.wall1.ilabt.imec.be"
+  },
+  "remotePaths": {
+    "evaluation": "~/experiments/decentralized-stream-aggregator-evaluation",
+    "heimdall": "~/experiments/heimdall",
+    "rspJs": "~/experiments/RSP-JS",
+    "replayer": "~/experiments/replayer"
+  },
+  "urls": {
+    "solidPod": "http://n079-11.wall1.ilabt.imec.be:3000/pod1/",
+    "heimdall": "ws://n079-09.wall1.ilabt.imec.be:8080/",
+    "notificationAggregator": "ws://n079-09.wall1.ilabt.imec.be:8085/",
+    "clientCallbackHost": "http://n079-02.wall1.ilabt.imec.be"
+  },
+  "streams": {
+    "x": "http://n079-11.wall1.ilabt.imec.be:3000/pod1/acc-x/",
+    "y": "http://n079-11.wall1.ilabt.imec.be:3000/pod1/acc-y/",
+    "z": "http://n079-11.wall1.ilabt.imec.be:3000/pod1/acc-z/"
+  }
+}

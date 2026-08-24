@@ -3,7 +3,7 @@ import * as fs from "fs";
 import * as path from "path";
 
 export const RSP_JS_EVALUATION_SHA = "45112d2955b99796d234747db34bd6804939e69a";
-export const HEIMDALL_EVALUATION_SHA = "5fca4fb5b35f5626e1cd382667920552f03d550a";
+export const HEIMDALL_EVALUATION_SHA = "575f1614aeb0841f6b4874b6e069a76b1db998b2";
 export const MAX_OUT_OF_ORDERNESS_MS = 30_000;
 
 export type Operation = "service_discovery" | "stream_discovery" | "query_reuse_check" |

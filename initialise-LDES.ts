@@ -1,15 +1,32 @@
 import { LDESinLDP, LDPCommunication } from "@treecg/versionawareldesinldp";
+import { ExperimentConfig, loadExperimentConfig } from "./src/experiments/config/config";
 
-const ldes_locations = ["http://n078-03.wall1.ilabt.imec.be:3000/pod1/acc-x/", "http://n078-03.wall1.ilabt.imec.be:3000/pod1/acc-y/", "http://n078-03.wall1.ilabt.imec.be:3000/pod1/acc-z/"]
-async function main() {
-    for (let ldes_location of ldes_locations) {
-        let ldes = new LDESinLDP(ldes_location, new LDPCommunication());
+export const treePath = "https://saref.etsi.org/core/hasTimestamp";
+
+function loadConfiguredExperimentConfig(): ExperimentConfig {
+    const configPath = process.env.EXPERIMENT_CONFIG_PATH;
+    if (!configPath) throw new Error("EXPERIMENT_CONFIG_PATH is required when initializing LDES sources.");
+    return loadExperimentConfig(configPath);
+}
+
+export function initializationTargets(config: ExperimentConfig = loadConfiguredExperimentConfig()): string[] {
+    return [config.streams.x, config.streams.y, config.streams.z];
+}
+
+export async function initialiseLdes(ldesLocations = initializationTargets()): Promise<void> {
+    for (const ldesLocation of ldesLocations) {
+        const ldes = new LDESinLDP(ldesLocation, new LDPCommunication());
         await ldes.initialise({
-            treePath: "https://saref.etsi.org/core/hasTimestamp"
+            treePath
         }).then(() => {
             console.log("Initialisation of LDES is done");
         });
     }
 }
 
-main();
+if (require.main === module) {
+    initialiseLdes().catch((error: Error) => {
+        console.error(error.message);
+        process.exitCode = 1;
+    });
+}

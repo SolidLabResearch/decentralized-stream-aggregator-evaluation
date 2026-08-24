@@ -30,21 +30,23 @@ Run the four-machine orchestration from the repository root:
 ```
 
 It reads the configured replayer, Solid Pod, client, and service hosts and
-keeps the legacy sequence: clean state, initialize LDES resources, start the
-needed service and clients, start the replayer, wait, collect, then stop.
-`HEIMDALL_SOLID_START_COMMAND`, `HEIMDALL_SOLID_READY_COMMAND`, and
-`HEIMDALL_START_COMMAND` are required because the legacy scripts do not define a
-Heimdall deployment command. Remote usernames, repository paths, SSH options,
+keeps the legacy sequence: clean state, initialize LDES resources on the
+client against the remote Solid Pod, start the needed service and clients,
+start the replayer, wait, collect, then stop. `HEIMDALL_START_COMMAND` is
+required because the legacy scripts do not define a Heimdall deployment
+command. Remote usernames, repository paths, SSH options,
 and the Pod cleanup/startup commands can be overridden by environment variables
 documented at the top of the script.
+Set `EXPERIMENT_CLIENT_CONFIG_PATH` to the deployment configuration path visible
+on the client machine; source initialization requires it explicitly.
 
 For a new deployment, use the portable SSH and remote-path fields in
 `config/deployment-config.example.json` as the basis for a private full
 configuration passed by `EXPERIMENT_CONFIG_PATH`. `--dry-run` prints the exact
 SSH/SCP sequence without contacting a host; `--preflight` checks local inputs
 then read-only SSH reachability, remote paths, Node availability, and the
-Heimdall/RSP-JS sibling layout. Runtime readiness is checked only after the
-explicit local Solid and Heimdall start commands have been launched. See `DEPLOYMENT.md` for the required four-machine
+Heimdall/RSP-JS sibling layout. Runtime readiness is checked after the
+configured Heimdall start command has been launched. See `DEPLOYMENT.md` for the required four-machine
 roles and system-information collection.
 
 For a local structural launcher check, use `npx ts-node` with an alternate
