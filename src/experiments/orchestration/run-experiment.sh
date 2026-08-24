@@ -45,13 +45,13 @@ remote_check() {
   if experiment_ssh "$host" "$command"; then echo "$label: OK"; else echo "$label: FAILED" >&2; return 1; fi
 }
 port_listening_command='if command -v ss >/dev/null; then ss -ltn "sport = :8080"; elif command -v netstat >/dev/null; then netstat -ltn 2>/dev/null | grep ":8080" || true; else echo "no-port-tool"; fi'
-wait_for_port() {
+wait_for_heimdall_health() {
   local timeout="${HEIMDALL_READY_TIMEOUT_SECONDS:-30}" elapsed=0
   while (( elapsed < timeout )); do
-    if experiment_ssh "$service_host" "$port_listening_command" | grep -q ':8080'; then return 0; fi
+    if experiment_ssh "$service_host" "curl --fail --silent --show-error http://127.0.0.1:8080/health >/dev/null"; then return 0; fi
     sleep 1; ((elapsed+=1))
   done
-  echo "Heimdall port 8080 did not become reachable within ${timeout}s." >&2; return 1
+  echo "Heimdall /health did not become reachable within ${timeout}s." >&2; return 1
 }
 
 if [[ "$mode" == "--dry-run" ]]; then print_plan; exit 0; fi
@@ -82,13 +82,18 @@ for iteration in $(seq 1 "$iterations"); do
   experiment_ssh "$pod_host" "$solid_cleanup"
   experiment_ssh "$client_host" "$solid_initialize" & init_pid=$!
   service_pid=""
-  if [[ "$service_host" != "none" ]]; then experiment_ssh "$service_host" "$service_start" >"$root/$iteration_dir/$approach.log" 2>&1 & service_pid=$!; fi
+  if [[ "$service_host" != "none" ]]; then
+    if [[ "$approach" == "heimdall" ]]; then
+      experiment_ssh "$service_host" "mkdir -p \"$evaluation_path/$iteration_dir/service\" && HEIMDALL_RESULTS_DIR=\"$evaluation_path/$iteration_dir/service\" HEIMDALL_RUN_ID='$run_id-$(printf '%02d' "$iteration")' HEIMDALL_APPROACH=heimdall HEIMDALL_RSP_JS_PATH=\"$rsp_js_path\" HEIMDALL_RESOURCE_INTERVAL_MS='$(read_config 'c.experiment.resourceSamplingIntervalMs')' $service_start" >"$root/$iteration_dir/$approach.log" 2>&1 & service_pid=$!
+    else experiment_ssh "$service_host" "$service_start" >"$root/$iteration_dir/$approach.log" 2>&1 & service_pid=$!; fi
+  fi
   wait "$init_pid"
-  if [[ "$approach" == "heimdall" ]]; then wait_for_port; elif [[ "$service_host" != "none" ]]; then sleep "${SERVICE_STARTUP_SECONDS:-15}"; fi
-  experiment_ssh "$client_host" "cd \"$evaluation_path\" && (npx ts-node '$launcher' --output-dir '$iteration_dir' & echo \$! > \"$client_pid_file\"; wait \$!)" >"$root/$iteration_dir/client-launcher.log" 2>&1 & client_pid=$!
+  if [[ "$approach" == "heimdall" ]]; then wait_for_heimdall_health; elif [[ "$service_host" != "none" ]]; then sleep "${SERVICE_STARTUP_SECONDS:-15}"; fi
+  experiment_ssh "$client_host" "cd \"$evaluation_path\" && (EXPERIMENT_RUN_ID='$run_id-$(printf '%02d' "$iteration")' EVALUATION_REPOSITORY_SHA='$(git rev-parse HEAD)' npx ts-node '$launcher' --output-dir '$iteration_dir' & echo \$! > \"$client_pid_file\"; wait \$!)" >"$root/$iteration_dir/client-launcher.log" 2>&1 & client_pid=$!
   experiment_ssh "$replayer_host" "$replayer_start" >"$root/$iteration_dir/replayer.log" 2>&1 & replayer_pid=$!
   sleep "$duration"; cleanup
   pids=("$client_pid" "$replayer_pid"); if [[ -n "$service_pid" ]]; then pids+=("$service_pid"); fi
   kill "${pids[@]}" 2>/dev/null || true; wait "${pids[@]}" 2>/dev/null || true
   experiment_scp_from "$client_host" "$evaluation_path/$iteration_dir/." "$root/$iteration_dir/"
+  if [[ "$approach" == "heimdall" ]]; then experiment_scp_from "$service_host" "$evaluation_path/$iteration_dir/service/." "$root/$iteration_dir/service/"; fi
 done

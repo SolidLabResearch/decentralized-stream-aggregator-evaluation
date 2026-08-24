@@ -1,6 +1,8 @@
 {
   "scripts": {
-    "check:experiments": "tsc --project tsconfig.experiments.json --noEmit"
+    "check:experiments": "tsc --project tsconfig.experiments.json --noEmit",
+    "test:component-latency": "node analysis/component-latency/test.js",
+    "analyze:component-latency": "node analysis/component-latency/analyze.js"
   },
   "dependencies": {
     "@solid/community-server": "^7.0.1",
