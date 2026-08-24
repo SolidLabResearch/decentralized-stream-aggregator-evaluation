@@ -1,0 +1,21 @@
+{
+  "ssh": {
+    "user": "<username>",
+    "bastion": null,
+    "identityFile": null,
+    "connectTimeoutSeconds": 10
+  },
+  "hosts": {
+    "replayer": "<replayer-host>",
+    "solidPod": "<solid-pod-host>",
+    "client": "<client-host>",
+    "heimdall": "<heimdall-host>",
+    "notificationAggregator": "<notification-aggregator-host>"
+  },
+  "remotePaths": {
+    "evaluation": "~/experiments/decentralized-stream-aggregator-evaluation",
+    "heimdall": "~/experiments/heimdall",
+    "rspJs": "~/experiments/RSP-JS",
+    "replayer": "~/experiments/replayer"
+  }
+}

@@ -6,6 +6,13 @@ This audit compares the historical files that were available on the
 `validate/4hz-reproduction` branch and the local sibling repositories. It does
 not change historical code or resolve scientific differences by preference.
 
+The historical topology was n078-06 (replayer), n078-03 (Solid Pod), n078-19
+(client), and n078-22 (Heimdall/service). Those hosts were unavailable from
+this environment during the recorded smoke-test attempt. A future deployment
+must preserve the same four-role isolation with newly allocated/reachable
+machines; it must not be described as hardware-equivalent until system facts
+have been collected.
+
 **QUERY SEMANTICS UNRESOLVED.** Every numbered `4Hz` entrypoint delegates to a
 20-second query, but the latest historical notification-aggregator orchestration
 does not call that entrypoint: it calls `master-process-main*.ts`, whose child

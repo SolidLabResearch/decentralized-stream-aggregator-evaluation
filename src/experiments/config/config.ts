@@ -3,7 +3,9 @@ import * as path from "path";
 
 export interface ExperimentConfig {
     experiment: { frequencyHz: number; clientCount: number; iterations: number; durationSeconds: number; resourceSamplingIntervalMs: number };
+    ssh: { user: string; bastion: string | null; identityFile: string | null; connectTimeoutSeconds: number };
     hosts: { replayer: string; solidPod: string; client: string; heimdall: string; notificationAggregator: string };
+    remotePaths: { evaluation: string; heimdall: string; rspJs: string; replayer: string };
     urls: { solidPod: string; heimdall: string; notificationAggregator: string; clientCallbackHost: string };
     streams: { x: string; y: string; z: string };
 }
@@ -24,7 +26,7 @@ function requiredString(value: unknown, field: string): void {
 
 export function validateExperimentConfig(config: ExperimentConfig): ExperimentConfig {
     if (!config || typeof config !== "object") throw new Error("Invalid experiment configuration: expected an object.");
-    if (!config.experiment || !config.hosts || !config.urls || !config.streams) throw new Error("Invalid experiment configuration: missing a required section.");
+    if (!config.experiment || !config.ssh || !config.hosts || !config.remotePaths || !config.urls || !config.streams) throw new Error("Invalid experiment configuration: missing a required section.");
     if (config.experiment.frequencyHz !== 4) throw new Error(`Unsupported frequencyHz ${config.experiment.frequencyHz}. Only 4 Hz is supported by this framework.`);
     if (!Number.isInteger(config.experiment.clientCount) || config.experiment.clientCount < 1 || config.experiment.clientCount > 10) {
         throw new Error("Invalid experiment configuration: clientCount must be an integer from 1 through 10.");
@@ -32,7 +34,13 @@ export function validateExperimentConfig(config: ExperimentConfig): ExperimentCo
     positiveInteger(config.experiment.iterations, "iterations");
     positiveInteger(config.experiment.durationSeconds, "durationSeconds");
     positiveInteger(config.experiment.resourceSamplingIntervalMs, "resourceSamplingIntervalMs");
+    requiredString(config.ssh.user, "ssh.user");
+    positiveInteger(config.ssh.connectTimeoutSeconds, "ssh.connectTimeoutSeconds");
+    for (const [key, value] of Object.entries({ bastion: config.ssh.bastion, identityFile: config.ssh.identityFile })) {
+        if (value !== null && (typeof value !== "string" || value.length === 0)) throw new Error(`Invalid experiment configuration: ssh.${key} must be null or a non-empty string.`);
+    }
     Object.entries(config.hosts).forEach(([key, value]) => requiredString(value, `hosts.${key}`));
+    Object.entries(config.remotePaths).forEach(([key, value]) => requiredString(value, `remotePaths.${key}`));
     Object.entries(config.urls).forEach(([key, value]) => requiredString(value, `urls.${key}`));
     Object.entries(config.streams).forEach(([key, value]) => requiredString(value, `streams.${key}`));
     return config;

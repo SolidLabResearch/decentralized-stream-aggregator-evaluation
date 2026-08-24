@@ -9,64 +9,86 @@ root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"; cd "$root"
 config_path="${EXPERIMENT_CONFIG_PATH:-$root/src/experiments/config/experiment-config.json}"
 config_json="$(npx --prefix "$root" ts-node -e "process.stdout.write(JSON.stringify(require('./src/experiments/config/config').loadExperimentConfig(process.argv[1])))" "$config_path")"
 read_config() { node -e "const c=JSON.parse(process.argv[1]); console.log($1)" "$config_json"; }
+source "$root/src/experiments/orchestration/ssh-helper.sh"
+
 frequency="$(read_config 'c.experiment.frequencyHz')"; iterations="$(read_config 'c.experiment.iterations')"; duration="$(read_config 'c.experiment.durationSeconds')"; client_count="$(read_config 'c.experiment.clientCount')"
 replayer_host="$(read_config 'c.hosts.replayer')"; pod_host="$(read_config 'c.hosts.solidPod')"; client_host="$(read_config 'c.hosts.client')"
-remote_user="${REMOTE_USER:-kbisenug}"; client_repo="${CLIENT_REPO_PATH:-/users/kbisenug/decentralized-stream-aggregator-evaluation}"
-replayer_repo="${REPLAYER_REPO_PATH:-/users/kbisenug/replayer}"; service_repo="${SERVICE_REPO_PATH:-/users/kbisenug/decentralized-stream-notifications-aggregator}"
-ssh_options="${SSH_OPTIONS:-}"; launcher="src/experiments/clients/$approach/launcher.ts"; output_root="results/4hz/$approach/clients-$client_count"
-pod_clean="${POD_CLEAN_COMMAND:-}"
-if [[ -z "$pod_clean" ]]; then pod_clean="rm -rf /users/kbisenug/data2/.internal/notifications /users/kbisenug/data2/pod1/acc-x/ /users/kbisenug/data2/pod1/acc-y/ /users/kbisenug/data2/pod1/acc-z/"; fi
-initialize="cd '$client_repo' && npx ts-node initialise-LDES.ts"
+SSH_USER="${EXPERIMENT_SSH_USER:-$(read_config 'c.ssh.user')}"; SSH_BASTION="${EXPERIMENT_SSH_BASTION:-$(read_config 'c.ssh.bastion === null ? "" : c.ssh.bastion')}"
+SSH_IDENTITY_FILE="${EXPERIMENT_SSH_IDENTITY_FILE:-$(read_config 'c.ssh.identityFile === null ? "" : c.ssh.identityFile')}"; SSH_CONNECT_TIMEOUT_SECONDS="${EXPERIMENT_SSH_CONNECT_TIMEOUT_SECONDS:-$(read_config 'c.ssh.connectTimeoutSeconds')}"
+experiment_ssh_args
+evaluation_path="$(experiment_remote_path "$(read_config 'c.remotePaths.evaluation')")"; heimdall_path="$(experiment_remote_path "$(read_config 'c.remotePaths.heimdall')")"; rsp_js_path="$(experiment_remote_path "$(read_config 'c.remotePaths.rspJs')")"; replayer_path="$(experiment_remote_path "$(read_config 'c.remotePaths.replayer')")"
+launcher="src/experiments/clients/$approach/launcher.ts"; run_id="${EXPERIMENT_RUN_ID:-$(date -u +%Y%m%dT%H%M%SZ)}"; output_root="results/4hz/$approach/clients-$client_count/run-$run_id"
+solid_initialize="${SOLID_INITIALIZE_COMMAND:-<SOLID_INITIALIZE_COMMAND is required>}"; solid_cleanup="${SOLID_CLEANUP_COMMAND:-<SOLID_CLEANUP_COMMAND is required>}"; replayer_start="${REPLAYER_START_COMMAND:-<REPLAYER_START_COMMAND is required>}"
 case "$approach" in
-  notification-aggregator) service_host="$(read_config 'c.hosts.notificationAggregator')"; service_start="${NOTIFICATION_AGGREGATOR_START_COMMAND:-cd '$service_repo' && npx ts-node start_notification_aggregator_process.ts}" ;;
+  notification-aggregator) service_host="$(read_config 'c.hosts.notificationAggregator')"; service_start="${NOTIFICATION_AGGREGATOR_START_COMMAND:-<NOTIFICATION_AGGREGATOR_START_COMMAND is required>}" ;;
   heimdall) service_host="$(read_config 'c.hosts.heimdall')"; service_start="${HEIMDALL_START_COMMAND:-<HEIMDALL_START_COMMAND is required>}" ;;
   without-aggregator) service_host="none"; service_start=":" ;;
 esac
 
+command_required() { [[ "$1" == "<"*" is required>" ]]; }
 print_plan() {
   echo "approach=$approach frequencyHz=$frequency clientCount=$client_count iterations=$iterations durationSeconds=$duration"
+  echo "ssh=user:$SSH_USER bastion:${SSH_BASTION:-none} identity:${SSH_IDENTITY_FILE:+configured} timeout:${SSH_CONNECT_TIMEOUT_SECONDS}s"
   echo "machines: replayer=$replayer_host solidPod=$pod_host client=$client_host service=$service_host"
+  echo "remote-paths: evaluation=$evaluation_path heimdall=$heimdall_path rspJs=$rsp_js_path replayer=$replayer_path"
   echo "output-root=$root/$output_root"
-  echo "solid-pod: ssh $remote_user@$pod_host '$pod_clean'"
-  echo "initialize: ssh $remote_user@$client_host '$initialize'"
-  if [[ "$service_host" == "none" ]]; then echo "service: none"; else echo "service: ssh $remote_user@$service_host '$service_start'"; fi
-  echo "clients: ssh $remote_user@$client_host \"cd '$client_repo' && npx ts-node '$launcher' --output-dir '$output_root/iteration-XX'\""
-  echo "replayer: ssh $remote_user@$replayer_host \"cd '$replayer_repo' && npm run start\""
-  echo "collect: scp -r $remote_user@$client_host:$client_repo/$output_root/iteration-XX/. $root/$output_root/iteration-XX/"
+  echo "solid-cleanup: $(experiment_ssh_preview "$pod_host" "$solid_cleanup")"
+  echo "solid-initialize: $(experiment_ssh_preview "$client_host" "$solid_initialize")"
+  if [[ "$service_host" == "none" ]]; then echo "service: none"; else echo "service: $(experiment_ssh_preview "$service_host" "$service_start")"; fi
+  echo "clients: $(experiment_ssh_preview "$client_host" "cd \"$evaluation_path\" && npx ts-node '$launcher' --output-dir '$output_root/iteration-XX'")"
+  echo "replayer: $(experiment_ssh_preview "$replayer_host" "$replayer_start")"
+  echo "collect: $(experiment_scp_preview "$client_host" "$evaluation_path/$output_root/iteration-XX/." "$root/$output_root/iteration-XX/")"
+}
+
+remote_check() {
+  local label="$1" host="$2" command="$3"
+  if experiment_ssh "$host" "$command"; then echo "$label: OK"; else echo "$label: FAILED" >&2; return 1; fi
+}
+port_listening_command='if command -v ss >/dev/null; then ss -ltn "sport = :8080"; elif command -v netstat >/dev/null; then netstat -ltn 2>/dev/null | grep ":8080" || true; else echo "no-port-tool"; fi'
+wait_for_port() {
+  local timeout="${HEIMDALL_READY_TIMEOUT_SECONDS:-30}" elapsed=0
+  while (( elapsed < timeout )); do
+    if experiment_ssh "$service_host" "$port_listening_command" | grep -q ':8080'; then return 0; fi
+    sleep 1; ((elapsed+=1))
+  done
+  echo "Heimdall port 8080 did not become reachable within ${timeout}s." >&2; return 1
 }
 
 if [[ "$mode" == "--dry-run" ]]; then print_plan; exit 0; fi
 if [[ "$mode" == "--preflight" ]]; then
   failures=0
   for required in "$config_path" "$root/initialise-LDES.ts" "$root/$launcher" "$root/node_modules/.bin/ts-node"; do
-    if [[ -e "$required" ]]; then echo "OK: $required"; else echo "MISSING: $required" >&2; failures=1; fi
+    if [[ -e "$required" ]]; then echo "LOCAL OK: $required"; else echo "LOCAL MISSING: $required" >&2; failures=1; fi
   done
-  if [[ -w "$root" ]]; then echo "OK: output root is writable ($root)"; else echo "NOT WRITABLE: $root" >&2; failures=1; fi
-  if [[ "$approach" == "heimdall" && "$service_start" == "<HEIMDALL_START_COMMAND is required>" ]]; then echo "MISSING: HEIMDALL_START_COMMAND for execution" >&2; failures=1; fi
+  if [[ -w "$root" ]]; then echo "LOCAL OK: output root is writable ($root)"; else echo "LOCAL NOT WRITABLE: $root" >&2; failures=1; fi
+  for command in "$solid_initialize" "$solid_cleanup" "$replayer_start"; do if command_required "$command"; then echo "CONFIG MISSING: ${command#<}" >&2; failures=1; fi; done
+  if [[ "$service_host" != "none" ]] && command_required "$service_start"; then echo "CONFIG MISSING: ${service_start#<}" >&2; failures=1; fi
+  remote_check "REPLAYER reachable/path/node" "$replayer_host" "test -d \"$replayer_path\" && command -v node && node --version" || failures=1
+  remote_check "SOLID POD reachable" "$pod_host" "hostname" || failures=1
+  remote_check "CLIENT reachable/evaluation-path/node" "$client_host" "test -d \"$evaluation_path\" && command -v node && node --version" || failures=1
+  if [[ "$service_host" != "none" ]]; then
+    remote_check "HEIMDALL reachable/repos/node/port" "$service_host" "test -d \"$heimdall_path\" && test -d \"$rsp_js_path\" && command -v node && node --version && $port_listening_command" || failures=1
+  fi
   print_plan
   exit "$failures"
 fi
-if [[ "$approach" == "heimdall" && "$service_start" == "<HEIMDALL_START_COMMAND is required>" ]]; then echo "Set HEIMDALL_START_COMMAND before running Heimdall." >&2; exit 2; fi
-ssh_run() { ssh $ssh_options "$remote_user@$1" "$2"; }
-client_pid_file="$client_repo/.4hz-$approach-launcher.pid"
-cleanup() { ssh_run "$client_host" "if test -f '$client_pid_file'; then kill -TERM \$(cat '$client_pid_file') 2>/dev/null || true; rm -f '$client_pid_file'; fi" || true; }
+for command in "$solid_initialize" "$solid_cleanup" "$replayer_start" "$service_start"; do if command_required "$command"; then echo "Set ${command#<} before running." >&2; exit 2; fi; done
+client_pid_file="$evaluation_path/.4hz-$approach-launcher.pid"
+cleanup() { experiment_ssh "$client_host" "if test -f \"$client_pid_file\"; then kill -TERM \$(cat \"$client_pid_file\") 2>/dev/null || true; rm -f \"$client_pid_file\"; fi" || true; }
 trap cleanup EXIT INT TERM
 for iteration in $(seq 1 "$iterations"); do
   iteration_dir="$output_root/iteration-$(printf '%02d' "$iteration")"
-  echo "[$approach] iteration $iteration/$iterations"
   mkdir -p "$root/$iteration_dir"
-  ssh_run "$pod_host" "$pod_clean"
-  ssh_run "$client_host" "rm -rf '$client_repo/$iteration_dir'; $initialize" & init_pid=$!
+  experiment_ssh "$pod_host" "$solid_cleanup"
+  experiment_ssh "$client_host" "$solid_initialize" & init_pid=$!
   service_pid=""
-  if [[ "$service_host" != "none" ]]; then ssh_run "$service_host" "$service_start" >"$root/$iteration_dir/$approach.log" 2>&1 & service_pid=$!; fi
-  wait "$init_pid"; sleep "${SERVICE_STARTUP_SECONDS:-15}"
-  ssh_run "$client_host" "cd '$client_repo' && (npx ts-node '$launcher' --output-dir '$iteration_dir' & echo \$! > '$client_pid_file'; wait \$!)" >"$root/$iteration_dir/client-launcher.log" 2>&1 & client_pid=$!
-  ssh_run "$replayer_host" "cd '$replayer_repo' && npm run start" >"$root/$iteration_dir/replayer.log" 2>&1 & replayer_pid=$!
-  sleep "$duration"
-  cleanup
-  pids=("$client_pid" "$replayer_pid")
-  if [[ -n "$service_pid" ]]; then pids+=("$service_pid"); fi
-  kill "${pids[@]}" 2>/dev/null || true
-  wait "${pids[@]}" 2>/dev/null || true
-  scp -r $ssh_options "$remote_user@$client_host:$client_repo/$iteration_dir/." "$root/$iteration_dir/"
+  if [[ "$service_host" != "none" ]]; then experiment_ssh "$service_host" "$service_start" >"$root/$iteration_dir/$approach.log" 2>&1 & service_pid=$!; fi
+  wait "$init_pid"
+  if [[ "$approach" == "heimdall" ]]; then wait_for_port; elif [[ "$service_host" != "none" ]]; then sleep "${SERVICE_STARTUP_SECONDS:-15}"; fi
+  experiment_ssh "$client_host" "cd \"$evaluation_path\" && (npx ts-node '$launcher' --output-dir '$iteration_dir' & echo \$! > \"$client_pid_file\"; wait \$!)" >"$root/$iteration_dir/client-launcher.log" 2>&1 & client_pid=$!
+  experiment_ssh "$replayer_host" "$replayer_start" >"$root/$iteration_dir/replayer.log" 2>&1 & replayer_pid=$!
+  sleep "$duration"; cleanup
+  pids=("$client_pid" "$replayer_pid"); if [[ -n "$service_pid" ]]; then pids+=("$service_pid"); fi
+  kill "${pids[@]}" 2>/dev/null || true; wait "${pids[@]}" 2>/dev/null || true
+  experiment_scp_from "$client_host" "$evaluation_path/$iteration_dir/." "$root/$iteration_dir/"
 done

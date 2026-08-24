@@ -37,6 +37,14 @@ Heimdall deployment command. Remote usernames, repository paths, SSH options,
 and the Pod cleanup/startup commands can be overridden by environment variables
 documented at the top of the script.
 
+For a new deployment, use the portable SSH and remote-path fields in
+`config/deployment-config.example.json` as the basis for a private full
+configuration passed by `EXPERIMENT_CONFIG_PATH`. `--dry-run` prints the exact
+SSH/SCP sequence without contacting a host; `--preflight` checks local inputs
+then read-only SSH reachability, remote paths, Node availability, and Heimdall
+port 8080 where configured. See `DEPLOYMENT.md` for the required four-machine
+roles and system-information collection.
+
 For a local structural launcher check, use `npx ts-node` with an alternate
 configuration through `EXPERIMENT_CONFIG_PATH`, or a JSON overlay through
 `EXPERIMENT_CONFIG_OVERRIDES`; do not edit the committed defaults for a short

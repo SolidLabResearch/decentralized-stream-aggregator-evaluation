@@ -27,7 +27,7 @@ export function launchConfiguredClients(approach: Approach, clientModule: string
         approach, frequencyHz: config.experiment.frequencyHz, clientCount: config.experiment.clientCount,
         iteration, durationSeconds: config.experiment.durationSeconds,
         resourceSamplingIntervalMs: config.experiment.resourceSamplingIntervalMs, timestamp: new Date().toISOString(),
-        streams: config.streams, serviceUrls: config.urls, nodeVersion: process.version
+        hosts: config.hosts, streams: config.streams, serviceUrls: config.urls, nodeVersion: process.version
     }, null, 2) + "\n");
     const children: ChildProcess[] = [];
     for (let clientIndex = 0; clientIndex < config.experiment.clientCount; clientIndex++) {

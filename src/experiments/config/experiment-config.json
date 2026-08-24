@@ -6,12 +6,24 @@
     "durationSeconds": 720,
     "resourceSamplingIntervalMs": 500
   },
+  "ssh": {
+    "user": "kbisenug",
+    "bastion": null,
+    "identityFile": null,
+    "connectTimeoutSeconds": 10
+  },
   "hosts": {
     "replayer": "n078-06.wall1.ilabt.imec.be",
     "solidPod": "n078-03.wall1.ilabt.imec.be",
     "client": "n078-19.wall1.ilabt.imec.be",
     "heimdall": "n078-22.wall1.ilabt.imec.be",
     "notificationAggregator": "n078-22.wall1.ilabt.imec.be"
+  },
+  "remotePaths": {
+    "evaluation": "~/experiments/decentralized-stream-aggregator-evaluation",
+    "heimdall": "~/experiments/heimdall",
+    "rspJs": "~/experiments/RSP-JS",
+    "replayer": "~/experiments/replayer"
   },
   "urls": {
     "solidPod": "http://n078-03.wall1.ilabt.imec.be:3000/pod1/",
