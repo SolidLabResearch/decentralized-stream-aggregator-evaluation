@@ -53,6 +53,6 @@ function subscribe(stream: RDFStream, bucketStrategy: string): void {
     socket.on("error", (error) => console.error(`Notification client ${clientIndex}: ${error.message}`));
 }
 
-const shutdown = async () => { sockets.forEach((socket) => socket.close()); await monitor.stop(); timings.end(); results.end(); process.exit(0); };
+const shutdown = async (exitCode = 0) => { sockets.forEach((socket) => socket.close()); await monitor.stop(); timings.end(); results.end(); process.exit(exitCode); };
 process.once("SIGINT", shutdown); process.once("SIGTERM", shutdown);
-run().catch((error) => { console.error(error); process.exitCode = 1; });
+run().catch((error) => { console.error(error); void shutdown(1); });

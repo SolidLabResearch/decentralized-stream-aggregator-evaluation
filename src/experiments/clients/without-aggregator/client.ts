@@ -84,6 +84,6 @@ async function subscribe(streamName: string, port: number): Promise<void> {
     }, { headers: { "Content-Type": "application/ld+json" } });
 }
 
-const shutdown = async () => { if (server) await new Promise<void>((resolve) => server!.close(() => resolve())); await monitor.stop(); timings.end(); results.end(); process.exit(0); };
+const shutdown = async (exitCode = 0) => { if (server) await new Promise<void>((resolve) => server!.close(() => resolve())); await monitor.stop(); timings.end(); results.end(); process.exit(exitCode); };
 process.once("SIGINT", shutdown); process.once("SIGTERM", shutdown);
-run().catch((error) => { console.error(error); process.exitCode = 1; });
+run().catch((error) => { console.error(error); void shutdown(1); });

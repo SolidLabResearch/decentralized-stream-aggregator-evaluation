@@ -14,6 +14,6 @@ const websocket = new WebSocket(config.urls.heimdall, "solid-stream-aggregator-p
 
 websocket.once("open", () => websocket.send(JSON.stringify({ query: buildActivityIndexQuery(config.streams), type: "live" })));
 websocket.on("message", (data) => results.write(`${Date.now()},${JSON.stringify(data.toString())}\n`));
-websocket.on("error", (error) => console.error(`Heimdall client ${clientIndex}: ${error.message}`));
-const shutdown = async () => { websocket.close(); await monitor.stop(); results.end(); process.exit(0); };
+websocket.on("error", (error) => { console.error(`Heimdall client ${clientIndex}: ${error.message}`); void shutdown(1); });
+const shutdown = async (exitCode = 0) => { websocket.close(); await monitor.stop(); results.end(); process.exit(exitCode); };
 process.once("SIGINT", shutdown); process.once("SIGTERM", shutdown);
