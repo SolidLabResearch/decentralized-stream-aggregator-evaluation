@@ -17,7 +17,7 @@ SSH_USER="${EXPERIMENT_SSH_USER:-$(read_config 'c.ssh.user')}"; SSH_BASTION="${E
 SSH_IDENTITY_FILE="${EXPERIMENT_SSH_IDENTITY_FILE:-$(read_config 'c.ssh.identityFile === null ? "" : c.ssh.identityFile')}"; SSH_CONNECT_TIMEOUT_SECONDS="${EXPERIMENT_SSH_CONNECT_TIMEOUT_SECONDS:-$(read_config 'c.ssh.connectTimeoutSeconds')}"
 experiment_ssh_args
 evaluation_path="$(experiment_remote_path "$(read_config 'c.remotePaths.evaluation')")"; heimdall_path="$(experiment_remote_path "$(read_config 'c.remotePaths.heimdall')")"; rsp_js_path="$(experiment_remote_path "$(read_config 'c.remotePaths.rspJs')")"; replayer_path="$(experiment_remote_path "$(read_config 'c.remotePaths.replayer')")"
-evaluation_sha="$(git rev-parse HEAD)"; heimdall_sha="a6dbbba45f7d764355e010e4b5e3b82fd2795778"; rsp_js_sha="97a8865a3225a0699705d4f8cf7359ba6dd04611"; replayer_sha="a98ec1cba14f4437bb0bbefd915fb07e79a454fe"
+evaluation_sha="$(git rev-parse HEAD)"; heimdall_sha="771c6bb45fd5ea48612c833311ac3e98e0a96b81"; rsp_js_sha="70a0037afac24017094d1522019184320be4fe37"; replayer_sha="a98ec1cba14f4437bb0bbefd915fb07e79a454fe"
 launcher="src/experiments/clients/$approach/launcher.ts"; run_id="${EXPERIMENT_RUN_ID:-$(date -u +%Y%m%dT%H%M%SZ)}"; output_root="results/4hz/$approach/clients-$client_count/run-$run_id"
 client_config_path="${EXPERIMENT_CLIENT_CONFIG_PATH:-}"
 solid_initialize="cd \"$evaluation_path\" && EXPERIMENT_CONFIG_PATH=\"$client_config_path\" npx ts-node initialise-LDES.ts"; solid_cleanup="${SOLID_CLEANUP_COMMAND:-<SOLID_CLEANUP_COMMAND is required>}"; replayer_start="${REPLAYER_START_COMMAND:-<REPLAYER_START_COMMAND is required>}"
@@ -63,8 +63,8 @@ heimdall_query_ready_command() {
   printf 'test -f %s && awk -F, '\''NR == 1 { for (i = 1; i <= NF; i++) if ($i == "operation") operation_column = i; next } operation_column && $operation_column == "query_registration" { query_registration++ } operation_column && $operation_column == "stream_subscription" { stream_subscription++ } END { exit !(query_registration >= 1 && stream_subscription >= 3) }'\'' %s' \
     "$(shell_quote "$initialization_csv")" "$(shell_quote "$initialization_csv")"
 }
-heimdall_window_ready_command() {
-  csv_operation_count_command "$1" "window_query_processing"
+heimdall_first_result_ready_command() {
+  csv_operation_count_command "$1" "r2r_first_result"
 }
 print_plan() {
   echo "approach=$approach frequencyHz=$frequency clientCount=$client_count iterations=$iterations durationSeconds=$duration"
@@ -84,7 +84,7 @@ print_plan() {
     echo "heimdall-results: $service_iteration_dir"
     echo "heimdall-pid: $heimdall_pid_file"
     echo "heimdall-query-readiness: query_registration >= 1 and stream_subscription >= 3 (timeout=${HEIMDALL_QUERY_READY_TIMEOUT_SECONDS:-30}s)"
-    echo "heimdall-stop-mode: ${EXPERIMENT_STOP_AFTER_FIRST_WINDOW:-false} (poll=${EXPERIMENT_FIRST_WINDOW_POLL_INTERVAL_SECONDS:-1}s)"
+    echo "heimdall-stop-mode: ${EXPERIMENT_STOP_AFTER_FIRST_WINDOW:-false} (first-window signal=r2r_first_result, poll=${EXPERIMENT_FIRST_WINDOW_POLL_INTERVAL_SECONDS:-1}s)"
   else echo "service: $(experiment_ssh_preview "$service_host" "$service_start")"; fi
   echo "clients: $(experiment_ssh_preview "$client_host" "$(client_launch_command "$output_root/iteration-XX" "$run_id")")"
   echo "replayer: $(experiment_ssh_preview "$replayer_host" "$replayer_launch_command")"
@@ -154,7 +154,7 @@ for iteration in $(seq 1 "$iterations"); do
   fi
   experiment_ssh "$replayer_host" "$replayer_launch_command" >"$root/$iteration_dir/replayer.log" 2>&1 & replayer_pid=$!
   if [[ "$approach" == "heimdall" && "${EXPERIMENT_STOP_AFTER_FIRST_WINDOW:-false}" == "true" ]]; then
-    wait_for_command "first completed Heimdall window evaluation" "$(heimdall_window_ready_command "$service_iteration_dir/window-processing.csv")" "$duration" "${EXPERIMENT_FIRST_WINDOW_POLL_INTERVAL_SECONDS:-1}" || { echo "No completed Heimdall window evaluation appeared within ${duration}s after replay started." >&2; exit 1; }
+    wait_for_command "first Heimdall R2R result" "$(heimdall_first_result_ready_command "$service_iteration_dir/window-processing.csv")" "$duration" "${EXPERIMENT_FIRST_WINDOW_POLL_INTERVAL_SECONDS:-1}" || { echo "No r2r_first_result appeared within ${duration}s after replay started." >&2; exit 1; }
   else
     sleep "$duration"
   fi
