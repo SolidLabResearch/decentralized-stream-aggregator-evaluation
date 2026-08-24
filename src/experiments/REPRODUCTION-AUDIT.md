@@ -144,3 +144,53 @@ Remaining reproduction limitations are deliberate or unresolved:
 - The runner records a launcher PID and sends SIGTERM on cleanup; remote
   service/replayer cleanup still relies on their SSH process termination and
   needs a real one-client smoke verification.
+
+## Heimdall 4 Hz Smoke Test
+
+**Date/time:** 2026-08-24T11:02:07Z.
+
+**Evaluation revision:** `975f489` on `smoke/4hz-heimdall`.
+**Requested parameters:** 4 Hz, one client, one iteration, 30 seconds, 500 ms
+client resource sampling.
+
+The smoke test was **not executed**. Before making any remote change, a
+non-interactive read-only SSH reachability check was made with the documented
+historical account (`kbisenug`) and the local SSH agent only. Each target
+returned `No route to host` on port 22:
+
+| Machine | Host | Result |
+| --- | --- | --- |
+| Replayer | `n078-06.wall1.ilabt.imec.be` | Unreachable |
+| Solid Pod | `n078-03.wall1.ilabt.imec.be` | Unreachable |
+| Client | `n078-19.wall1.ilabt.imec.be` | Unreachable |
+| Heimdall service | `n078-22.wall1.ilabt.imec.be` | Unreachable |
+
+The historical PEM paths referenced by the old scripts are not present in this
+environment. No bastion, credential, or remote filesystem workaround was
+attempted. Consequently the remote Heimdall checkout, RSP-JS checkout, port
+8080 owner, running processes, and remote Node/npm versions could not be
+observed; their commit SHAs and dependency resolution are unknown.
+
+Local structural validation remains successful: `npm install`,
+`npm run check:experiments`, and Heimdall `--preflight`/`--dry-run` with a
+one-client/one-iteration/30-second runtime overlay. Preflight will pass only
+after the operator supplies a verified remote `HEIMDALL_START_COMMAND`.
+
+Once network access and the remote checkout are confirmed, run this first as a
+non-mutating review of the exact command sequence:
+
+```bash
+EXPERIMENT_CONFIG_OVERRIDES='{"experiment":{"clientCount":1,"iterations":1,"durationSeconds":30}}' \
+HEIMDALL_START_COMMAND='<command verified on n078-22>' \
+./src/experiments/orchestration/run-experiment.sh heimdall --preflight
+
+EXPERIMENT_CONFIG_OVERRIDES='{"experiment":{"clientCount":1,"iterations":1,"durationSeconds":30}}' \
+HEIMDALL_START_COMMAND='<command verified on n078-22>' \
+./src/experiments/orchestration/run-experiment.sh heimdall --dry-run
+```
+
+Only after remote inspection verifies the deployed dependency path and confirms
+that port 8080 is either free or owned by the intended service should the same
+command be run without `--dry-run`. No client connection, event processing,
+query result, resource CSV, log collection, or cleanup outcome can be claimed
+until then.
