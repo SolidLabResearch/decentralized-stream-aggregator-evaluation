@@ -29,8 +29,27 @@ const dryRun = execFileSync("bash", [
     }
 }).toString();
 const normalizedDryRun = dryRun.replace(/\\(.)/g, "$1");
+const absolutePathDryRun = execFileSync("bash", [
+    path.join(repositoryRoot, "src/experiments/orchestration/run-experiment.sh"),
+    "heimdall",
+    "--dry-run"
+], {
+    cwd: repositoryRoot,
+    env: {
+        ...process.env,
+        EXPERIMENT_CONFIG_PATH: path.join(repositoryRoot, "src/experiments/config/experiment-config.n079.test.json"),
+        EXPERIMENT_CLIENT_CONFIG_PATH: "/home/test/experiment-config.n079.json",
+        EXPERIMENT_RUN_ID: "absolute-path-test",
+        EXPERIMENT_CONFIG_OVERRIDES: JSON.stringify({ remotePaths: { heimdall: "/srv/heimdall" } })
+    }
+}).toString().replace(/\\(.)/g, "$1");
 assert.match(normalizedDryRun, /heimdall-results: .*\.evaluation-results\/dry-run-test\/iteration-XX/);
 assert.match(normalizedDryRun, /heimdall-pid: .*\.evaluation-results\/dry-run-test\/heimdall\.pid/);
+assert.match(normalizedDryRun, /heimdall-query-ready-command: .*test -f \"\$HOME\"'\/experiments\/heimdall\/\.evaluation-results\/dry-run-test\/iteration-XX\/initialization\.csv'/);
+assert.match(normalizedDryRun, /heimdall-first-result-ready-command: .*test -f \"\$HOME\"'\/experiments\/heimdall\/\.evaluation-results\/dry-run-test\/iteration-XX\/window-processing\.csv'/);
+assert.doesNotMatch(normalizedDryRun, /test -f '\$HOME\//);
+assert.match(absolutePathDryRun, /heimdall-query-ready-command: .*test -f '\/srv\/heimdall\/\.evaluation-results\/absolute-path-test\/iteration-XX\/initialization\.csv'/);
+assert.match(absolutePathDryRun, /heimdall-first-result-ready-command: .*test -f '\/srv\/heimdall\/\.evaluation-results\/absolute-path-test\/iteration-XX\/window-processing\.csv'/);
 assert.match(normalizedDryRun, /expected-shas: .*replayer=a98ec1cba14f4437bb0bbefd915fb07e79a454fe/);
 assert.match(normalizedDryRun, /expected-shas: .*heimdall=771c6bb45fd5ea48612c833311ac3e98e0a96b81/);
 assert.match(normalizedDryRun, /expected-shas: .*rspJs=70a0037afac24017094d1522019184320be4fe37/);
@@ -66,10 +85,17 @@ assert.match(runnerSource, /== "true"/);
 assert.match(runnerSource, /\"\$duration\"/);
 assert.match(runnerSource, /replayer will not be started/);
 assert.ok(runnerSource.indexOf('wait_for_command "Heimdall query/subscription readiness"') < runnerSource.indexOf('experiment_ssh "$replayer_host" "$replayer_launch_command"'));
+assert.ok(runnerSource.indexOf('wait_for_command "first Heimdall R2R result"') > runnerSource.indexOf('experiment_ssh "$replayer_host" "$replayer_launch_command"'));
 assert.match(normalizedDryRun, /heimdall-query-readiness: query_registration >= 1 and stream_subscription >= 3/);
 assert.match(normalizedDryRun, /heimdall-stop-mode: false/);
 assert.match(normalizedDryRun, /first-window signal=r2r_first_result/);
 assert.match(runnerSource, /else\n    sleep "\$duration"/);
 assert.match(runnerSource, /heimdall_first_result_ready_command[\s\S]*\$duration/);
 assert.doesNotMatch(runnerSource, /\b(pkill|killall)\b/);
+assert.match(runnerSource, /remote_path_expression\(\)/);
+assert.match(runnerSource, /remote_path_expression "\$csv_path"/);
+assert.match(runnerSource, /remote_path_expression "\$initialization_csv"/);
+assert.match(runnerSource, /SOLID POD HTTP reachable/);
+assert.match(runnerSource, /curl --fail --silent --show-error --max-time 10/);
+assert.match(runnerSource, /solid_pod_url/);
 console.log("initialise-LDES n079 configuration test passed");

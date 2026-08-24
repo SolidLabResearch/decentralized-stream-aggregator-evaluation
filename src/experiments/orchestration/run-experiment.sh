@@ -12,7 +12,7 @@ read_config() { node -e "const c=JSON.parse(process.argv[1]); console.log($1)" "
 source "$root/src/experiments/orchestration/ssh-helper.sh"
 
 frequency="$(read_config 'c.experiment.frequencyHz')"; iterations="$(read_config 'c.experiment.iterations')"; duration="$(read_config 'c.experiment.durationSeconds')"; client_count="$(read_config 'c.experiment.clientCount')"
-replayer_host="$(read_config 'c.hosts.replayer')"; pod_host="$(read_config 'c.hosts.solidPod')"; client_host="$(read_config 'c.hosts.client')"
+replayer_host="$(read_config 'c.hosts.replayer')"; pod_host="$(read_config 'c.hosts.solidPod')"; client_host="$(read_config 'c.hosts.client')"; solid_pod_url="$(read_config 'c.urls.solidPod')"
 SSH_USER="${EXPERIMENT_SSH_USER:-$(read_config 'c.ssh.user')}"; SSH_BASTION="${EXPERIMENT_SSH_BASTION:-$(read_config 'c.ssh.bastion === null ? "" : c.ssh.bastion')}"
 SSH_IDENTITY_FILE="${EXPERIMENT_SSH_IDENTITY_FILE:-$(read_config 'c.ssh.identityFile === null ? "" : c.ssh.identityFile')}"; SSH_CONNECT_TIMEOUT_SECONDS="${EXPERIMENT_SSH_CONNECT_TIMEOUT_SECONDS:-$(read_config 'c.ssh.connectTimeoutSeconds')}"
 experiment_ssh_args
@@ -34,6 +34,15 @@ case "$approach" in
 esac
 
 command_required() { [[ "$1" == "<"*" is required>" ]]; }
+remote_path_expression() {
+  local value="$1"
+  if [[ "$value" == '$HOME/'* ]]; then
+    # Keep the variable expansion outside the single-quoted path suffix.
+    printf '"$HOME"%s' "$(shell_quote "${value#'$HOME'}")"
+  else
+    shell_quote "$value"
+  fi
+}
 shell_quote() {
   local value="$1"
   printf "'%s'" "${value//\'/\'\\\'\'}"
@@ -56,12 +65,12 @@ heimdall_launch_command="mkdir -p \"$service_results_root\" \"$service_iteration
 csv_operation_count_command() {
   local csv_path="$1" operation="$2"
   printf 'test -f %s && awk -F, '\''NR == 1 { for (i = 1; i <= NF; i++) if ($i == "operation") operation_column = i; next } operation_column && $operation_column == "%s" { count++ } END { exit !(count >= 1) }'\'' %s' \
-    "$(shell_quote "$csv_path")" "$operation" "$(shell_quote "$csv_path")"
+    "$(remote_path_expression "$csv_path")" "$operation" "$(remote_path_expression "$csv_path")"
 }
 heimdall_query_ready_command() {
   local initialization_csv="$1"
   printf 'test -f %s && awk -F, '\''NR == 1 { for (i = 1; i <= NF; i++) if ($i == "operation") operation_column = i; next } operation_column && $operation_column == "query_registration" { query_registration++ } operation_column && $operation_column == "stream_subscription" { stream_subscription++ } END { exit !(query_registration >= 1 && stream_subscription >= 3) }'\'' %s' \
-    "$(shell_quote "$initialization_csv")" "$(shell_quote "$initialization_csv")"
+    "$(remote_path_expression "$initialization_csv")" "$(remote_path_expression "$initialization_csv")"
 }
 heimdall_first_result_ready_command() {
   csv_operation_count_command "$1" "r2r_first_result"
@@ -83,6 +92,8 @@ print_plan() {
     echo "heimdall: $(experiment_ssh_preview "$service_host" "$heimdall_launch_command")"
     echo "heimdall-results: $service_iteration_dir"
     echo "heimdall-pid: $heimdall_pid_file"
+    echo "heimdall-query-ready-command: $(heimdall_query_ready_command "$service_iteration_dir/initialization.csv")"
+    echo "heimdall-first-result-ready-command: $(heimdall_first_result_ready_command "$service_iteration_dir/window-processing.csv")"
     echo "heimdall-query-readiness: query_registration >= 1 and stream_subscription >= 3 (timeout=${HEIMDALL_QUERY_READY_TIMEOUT_SECONDS:-30}s)"
     echo "heimdall-stop-mode: ${EXPERIMENT_STOP_AFTER_FIRST_WINDOW:-false} (first-window signal=r2r_first_result, poll=${EXPERIMENT_FIRST_WINDOW_POLL_INTERVAL_SECONDS:-1}s)"
   else echo "service: $(experiment_ssh_preview "$service_host" "$service_start")"; fi
@@ -117,7 +128,8 @@ if [[ "$mode" == "--preflight" ]]; then
   for command in "$solid_cleanup" "$replayer_start"; do if command_required "$command"; then echo "CONFIG MISSING: ${command#<}" >&2; failures=1; fi; done
   if [[ "$service_host" != "none" ]] && command_required "$service_start"; then echo "CONFIG MISSING: ${service_start#<}" >&2; failures=1; fi
   remote_check "REPLAYER reachable/path/SHA/node" "$replayer_host" "test -d \"$replayer_path\" && test \"\$(git -C \"$replayer_path\" rev-parse HEAD)\" = \"$replayer_sha\" && command -v node && node --version" || failures=1
-  remote_check "SOLID POD reachable" "$pod_host" "hostname" || failures=1
+  remote_check "SOLID POD SSH reachable" "$pod_host" "hostname" || failures=1
+  remote_check "SOLID POD HTTP reachable" "$client_host" "command -v curl >/dev/null && curl --fail --silent --show-error --max-time 10 --output /dev/null \"$solid_pod_url\"" || failures=1
   remote_check "CLIENT reachable/evaluation-path/SHA/node" "$client_host" "test -d \"$evaluation_path\" && test \"\$(git -C \"$evaluation_path\" rev-parse HEAD)\" = \"$evaluation_sha\" && command -v node && node --version" || failures=1
   if [[ "$service_host" != "none" ]]; then
     remote_check "HEIMDALL reachable/repos/SHAs/node/RSP-JS sibling" "$service_host" "test -d \"$heimdall_path\" && test \"\$(git -C \"$heimdall_path\" rev-parse HEAD)\" = \"$heimdall_sha\" && test -d \"$rsp_js_path\" && test \"\$(git -C \"$rsp_js_path\" rev-parse HEAD)\" = \"$rsp_js_sha\" && test \"\$(cd \"$heimdall_path/../RSP-JS\" && pwd)\" = \"\$(cd \"$rsp_js_path\" && pwd)\" && command -v node && node --version" || failures=1
