@@ -111,6 +111,28 @@ all_client_ready_markers_command() {
   local iteration_dir="$1"
   printf 'iteration_dir=%s; count=0; for client_id in $(seq 0 %s); do marker="\$iteration_dir/client-\$client_id-ready.json"; test -s "\$marker" || exit 1; count=$((count + 1)); done; test "\$count" -eq %s' "$(remote_path_expression "$evaluation_path/$iteration_dir")" "$((client_count - 1))" "$client_count"
 }
+network_snapshot_base="${EXPERIMENT_NETWORK_SNAPSHOT_ROOT:-.evaluation-network}"
+network_snapshot_command() {
+  local role="$1" route_target="$2" phase="$3" iteration_label="$4" override_name="EXPERIMENT_NETWORK_INTERFACE_${1^^}" override="${!override_name:-}"
+  local snapshot_file="$network_snapshot_base/$run_id/$iteration_label/$role.$phase.csv"
+  printf 'set -euo pipefail; file=%s; target=%s; override=%s; mkdir -p "$(dirname "$file")"; if test -n "$override"; then interface="$override"; else command -v ip >/dev/null || { echo "network snapshot: ip is unavailable" >&2; exit 1; }; interface=$(ip route get "$target" | awk '\''NR == 1 { for (i = 1; i <= NF; i++) if ($i == "dev") { print $(i + 1); exit } }'\''); fi; test -n "$interface" || { echo "network snapshot: no route interface for $target" >&2; exit 1; }; test "$interface" != lo || { echo "network snapshot: loopback is not permitted" >&2; exit 1; }; test -r "/sys/class/net/$interface/statistics/rx_bytes" && test -r "/sys/class/net/$interface/statistics/tx_bytes" || { echo "network snapshot: selected interface $interface is unavailable" >&2; exit 1; }; epoch=$(date +%%s%%3N); uptime=$(cut -d " " -f 1 /proc/uptime); seconds=${uptime%%.*}; fraction=${uptime#*.}; fraction=${fraction:0:9}; printf -v fraction "%%-9s" "$fraction"; fraction=${fraction// /0}; monotonic="${seconds}${fraction}"; rx=$(cat "/sys/class/net/$interface/statistics/rx_bytes"); tx=$(cat "/sys/class/net/$interface/statistics/tx_bytes"); case "$rx,$tx,$epoch,$monotonic" in *[!0-9,]*) echo "network snapshot: malformed kernel counter" >&2; exit 1;; esac; tmp="$file.tmp.$$"; printf "%%s,%%s,%%s,%%s,%%s,%%s,%%s\\n" %s "$(hostname -s)" "$interface" "$epoch" "$monotonic" "$rx" "$tx" > "$tmp"; mv "$tmp" "$file"' \
+    "$(shell_quote "$snapshot_file")" "$(shell_quote "$route_target")" "$(shell_quote "$override")" "$(shell_quote "$role")"
+}
+capture_network_snapshots() {
+  local phase="$1" iteration_label="$2" -a snapshot_pids=() snapshot_labels=()
+  local solid_route_target="$client_host"
+  [[ "$service_host" != "none" ]] && solid_route_target="$service_host"
+  local -a roles=(solid client replayer) hosts=("$pod_host" "$client_host" "$replayer_host") targets=("$solid_route_target" "$pod_host" "$pod_host")
+  if [[ "$service_host" != "none" ]]; then roles+=(service); hosts+=("$service_host"); targets+=("$pod_host"); fi
+  local index
+  for index in "${!roles[@]}"; do
+    experiment_ssh "${hosts[$index]}" "$(network_snapshot_command "${roles[$index]}" "${targets[$index]}" "$phase" "$iteration_label")" >"$root/$iteration_dir/network-${roles[$index]}-$phase.log" 2>&1 &
+    snapshot_pids+=("$!"); snapshot_labels+=("${roles[$index]}")
+  done
+  for index in "${!snapshot_pids[@]}"; do
+    wait "${snapshot_pids[$index]}" || { echo "Network $phase snapshot failed for ${snapshot_labels[$index]}." >&2; return 1; }
+  done
+}
 print_plan() {
   echo "approach=$approach frequencyHz=$frequency clientCount=$client_count iterations=$iterations durationSeconds=$duration"
   echo "ssh=user:$SSH_USER bastion:${SSH_BASTION:-none} identity:${SSH_IDENTITY_FILE:+configured} timeout:${SSH_CONNECT_TIMEOUT_SECONDS}s"
@@ -120,6 +142,7 @@ print_plan() {
   echo "output-root=$root/$output_root"
   echo "replayer-runtime: $replayer_runtime_root"
   echo "replayer-pid: $replayer_pid_file"
+  echo "network-snapshots: two local kernel-counter snapshots per measured host under $network_snapshot_base/$run_id/iteration-XX"
   echo "cleanup-pids: heimdall=$heimdall_pid_file replayer=$replayer_pid_file"
   echo "solid-cleanup: $(experiment_ssh_preview "$pod_host" "$solid_cleanup")"
   echo "solid-initialize: $(experiment_ssh_preview "$client_host" "$solid_initialize")"
@@ -215,14 +238,28 @@ for iteration in $(seq 1 "$iterations"); do
   if [[ "$approach" == "heimdall" ]]; then wait_for_command "Heimdall /health" "curl --fail --silent --show-error http://127.0.0.1:8080/health >/dev/null" "${HEIMDALL_READY_TIMEOUT_SECONDS:-30}"; elif [[ "$service_host" != "none" ]]; then sleep "${SERVICE_STARTUP_SECONDS:-15}"; fi
   experiment_ssh "$client_host" "$(client_launch_command "$iteration_dir" "$run_id-$(printf '%02d' "$iteration")")" >"$root/$iteration_dir/client-launcher.log" 2>&1 & client_pid=$!
   wait_for_command_on_host "all client confirmed-ready markers" "$client_host" "$(all_client_ready_markers_command "$iteration_dir")" "${CLIENT_READY_TIMEOUT_SECONDS:-60}" "${EXPERIMENT_FIRST_WINDOW_POLL_INTERVAL_SECONDS:-1}" || { echo "Not all $client_count clients became ready; replayer will not be started." >&2; exit 1; }
+  capture_network_snapshots start "iteration-$(printf '%02d' "$iteration")"
   experiment_ssh "$replayer_host" "$replayer_launch_command" >"$root/$iteration_dir/replayer.log" 2>&1 & replayer_pid=$!
   if [[ "$approach" == "heimdall" && "${EXPERIMENT_STOP_AFTER_FIRST_WINDOW:-false}" == "true" ]]; then
     wait_for_command "first Heimdall R2R result" "$(heimdall_first_result_ready_command "$service_iteration_dir/window-processing.csv")" "$duration" "${EXPERIMENT_FIRST_WINDOW_POLL_INTERVAL_SECONDS:-1}" || { echo "No r2r_first_result appeared within ${duration}s after replay started." >&2; exit 1; }
   fi
   wait_for_command_on_host "all client first-result markers" "$client_host" "$(all_client_first_result_markers_ready_command "$iteration_dir")" "$duration" "${EXPERIMENT_FIRST_WINDOW_POLL_INTERVAL_SECONDS:-1}" || { echo "Not all $client_count clients produced a first result within ${duration}s after replay started." >&2; exit 1; }
+  wait "$replayer_pid"
+  capture_network_snapshots end "iteration-$(printf '%02d' "$iteration")"
   cleanup
   pids=("$client_pid" "$replayer_pid"); if [[ -n "$service_pid" ]]; then pids+=("$service_pid"); fi; if [[ -n "$service_monitor_pid" ]]; then pids+=("$service_monitor_pid"); fi
   kill "${pids[@]}" 2>/dev/null || true; wait "${pids[@]}" 2>/dev/null || true
   experiment_scp_from "$client_host" "$evaluation_path/$iteration_dir" "$root/$output_root/"
+  mkdir -p "$root/$iteration_dir/network"
+  for network_role in solid client replayer; do
+    network_host="$pod_host"; [[ "$network_role" == client ]] && network_host="$client_host"; [[ "$network_role" == replayer ]] && network_host="$replayer_host"
+    experiment_scp_from "$network_host" "$network_snapshot_base/$run_id/iteration-$(printf '%02d' "$iteration")/$network_role.start.csv" "$root/$iteration_dir/network/"
+    experiment_scp_from "$network_host" "$network_snapshot_base/$run_id/iteration-$(printf '%02d' "$iteration")/$network_role.end.csv" "$root/$iteration_dir/network/"
+  done
+  if [[ "$service_host" != "none" ]]; then
+    experiment_scp_from "$service_host" "$network_snapshot_base/$run_id/iteration-$(printf '%02d' "$iteration")/service.start.csv" "$root/$iteration_dir/network/"
+    experiment_scp_from "$service_host" "$network_snapshot_base/$run_id/iteration-$(printf '%02d' "$iteration")/service.end.csv" "$root/$iteration_dir/network/"
+  fi
+  npx --prefix "$root" ts-node src/experiments/network/collect-network.ts --output "$root/$iteration_dir/network.csv" --approach "$approach" --run-id "$run_id" --client-count "$client_count" --iteration "$iteration" --input-dir "$root/$iteration_dir/network"
   if [[ "$service_host" != "none" ]]; then experiment_scp_from "$service_host" "$service_iteration_dir" "$root/$iteration_dir/service"; if [[ -f "$root/$iteration_dir/service/resource.csv" ]]; then cp "$root/$iteration_dir/service/resource.csv" "$root/$iteration_dir/service-resource.csv"; elif [[ -f "$root/$iteration_dir/service/service-resource.csv" ]]; then cp "$root/$iteration_dir/service/service-resource.csv" "$root/$iteration_dir/service-resource.csv"; fi; fi
 done

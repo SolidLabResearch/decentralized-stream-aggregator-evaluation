@@ -1,0 +1,12 @@
+import * as fs from "fs";
+import * as path from "path";
+
+interface Row { approach: string; client_count: string; iteration: string; role: string; rx_bytes: string; tx_bytes: string; rx_mbps: string; tx_mbps: string; total_mbps: string; }
+function parseCsv(file: string): Row[] { const [header, ...lines] = fs.readFileSync(file, "utf8").trim().split(/\r?\n/); const keys = header.split(","); return lines.filter(Boolean).map(line => Object.fromEntries(line.split(",").map((value, index) => [keys[index], value])) as unknown as Row); }
+function files(root: string): string[] { const entries = fs.readdirSync(root, { withFileTypes: true }); return entries.flatMap(entry => entry.isDirectory() ? files(path.join(root, entry.name)) : entry.name === "network.csv" ? [path.join(root, entry.name)] : []); }
+function stats(values: number[]): string { const sorted = [...values].sort((a, b) => a - b); const quantile = (q: number) => { const position = (sorted.length - 1) * q; const lower = Math.floor(position); const upper = Math.ceil(position); return sorted[lower] + (sorted[upper] - sorted[lower]) * (position - lower); }; const mean = values.reduce((sum, value) => sum + value, 0) / values.length; const sd = Math.sqrt(values.reduce((sum, value) => sum + (value - mean) ** 2, 0) / Math.max(values.length - 1, 1)); return [mean, sd, quantile(.5), quantile(.25), quantile(.75)].map(value => value.toFixed(6)).join(","); }
+const root = process.argv[2]; if (!root) throw new Error("Usage: ts-node analyze-network.ts <experiment-results-directory>");
+const grouped = new Map<string, Row[]>();
+for (const row of files(root).flatMap(parseCsv)) { const iteration = Number(row.iteration); if (iteration < 4 || iteration > 33) continue; const key = [row.approach, row.client_count, row.role].join(","); grouped.set(key, [...(grouped.get(key) || []), row]); }
+console.log("approach,client_count,role,n,mean_rx_bytes,sd_rx_bytes,median_rx_bytes,q1_rx_bytes,q3_rx_bytes,mean_tx_bytes,sd_tx_bytes,median_tx_bytes,q1_tx_bytes,q3_tx_bytes,mean_rx_mbps,mean_tx_mbps,mean_total_mbps");
+for (const [key, rows] of [...grouped.entries()].sort()) console.log(`${key},${rows.length},${stats(rows.map(row => Number(row.rx_bytes)))},${stats(rows.map(row => Number(row.tx_bytes)))},${(rows.reduce((sum, row) => sum + Number(row.rx_mbps), 0) / rows.length).toFixed(6)},${(rows.reduce((sum, row) => sum + Number(row.tx_mbps), 0) / rows.length).toFixed(6)},${(rows.reduce((sum, row) => sum + Number(row.total_mbps), 0) / rows.length).toFixed(6)}`);

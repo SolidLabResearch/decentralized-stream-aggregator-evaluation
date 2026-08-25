@@ -2,6 +2,8 @@
   "scripts": {
     "check:experiments": "tsc --project tsconfig.experiments.json --noEmit",
     "test:experiments": "ts-node test/initialise-LDES.test.ts && ts-node test/experiments-hardening.test.ts",
+    "test:network-traffic": "ts-node test/network-traffic.test.ts",
+    "analyze:network-traffic": "ts-node src/experiments/network/analyze-network.ts",
     "test:initialization-benchmark": "node test/initialization-benchmark.test.js",
     "benchmark:init": "node src/initialization-benchmark/benchmark.js",
     "benchmark:init:smoke": "node src/initialization-benchmark/benchmark.js --smoke",
