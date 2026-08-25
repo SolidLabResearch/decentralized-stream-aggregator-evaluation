@@ -50,7 +50,7 @@ assert.match(normalizedDryRun, /heimdall-first-result-ready-command: .*test -f \
 assert.doesNotMatch(normalizedDryRun, /test -f '\$HOME\//);
 assert.match(absolutePathDryRun, /heimdall-query-ready-command: .*test -f '\/srv\/heimdall\/\.evaluation-results\/absolute-path-test\/iteration-XX\/initialization\.csv'/);
 assert.match(absolutePathDryRun, /heimdall-first-result-ready-command: .*test -f '\/srv\/heimdall\/\.evaluation-results\/absolute-path-test\/iteration-XX\/window-processing\.csv'/);
-assert.match(normalizedDryRun, /expected-shas: .*replayer=20cb841c069cd81b7ba79763a62c94a05fdd6ceb/);
+assert.match(normalizedDryRun, /expected-shas: .*replayer=a98ec1cba14f4437bb0bbefd915fb07e79a454fe/);
 assert.match(normalizedDryRun, /expected-shas: .*heimdall=aa4a674ca03c7eb5a0e0e626ea5a8b3d190a9fef/);
 assert.match(normalizedDryRun, /clients: .*EXPERIMENT_CONFIG_PATH='\/home\/test\/experiment-config\.n079\.json'/);
 assert.match(normalizedDryRun, /clients: .*EXPERIMENT_RUN_ID='dry-run-test'.*EVALUATION_REPOSITORY_SHA=/);
