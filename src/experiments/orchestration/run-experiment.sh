@@ -16,8 +16,8 @@ replayer_host="$(read_config 'c.hosts.replayer')"; pod_host="$(read_config 'c.ho
 SSH_USER="${EXPERIMENT_SSH_USER:-$(read_config 'c.ssh.user')}"; SSH_BASTION="${EXPERIMENT_SSH_BASTION:-$(read_config 'c.ssh.bastion === null ? "" : c.ssh.bastion')}"
 SSH_IDENTITY_FILE="${EXPERIMENT_SSH_IDENTITY_FILE:-$(read_config 'c.ssh.identityFile === null ? "" : c.ssh.identityFile')}"; SSH_CONNECT_TIMEOUT_SECONDS="${EXPERIMENT_SSH_CONNECT_TIMEOUT_SECONDS:-$(read_config 'c.ssh.connectTimeoutSeconds')}"
 experiment_ssh_args
-evaluation_path="$(experiment_remote_path "$(read_config 'c.remotePaths.evaluation')")"; heimdall_path="$(experiment_remote_path "$(read_config 'c.remotePaths.heimdall')")"; rsp_js_path="$(experiment_remote_path "$(read_config 'c.remotePaths.rspJs')")"; replayer_path="$(experiment_remote_path "$(read_config 'c.remotePaths.replayer')")"
-evaluation_sha="${EVALUATION_REPOSITORY_SHA_EXPECTED:-$(git rev-parse HEAD)}"; heimdall_sha="${HEIMDALL_REPOSITORY_SHA_EXPECTED:-aa4a674ca03c7eb5a0e0e626ea5a8b3d190a9fef}"; rsp_js_sha="${RSP_JS_SHA_EXPECTED:-$(git -C "$root/../RSP-JS" rev-parse HEAD)}"; replayer_sha="${REPLAYER_REPOSITORY_SHA_EXPECTED:-$(git -C "$root/../kvasir-replayer" rev-parse HEAD)}"
+evaluation_path="$(experiment_remote_path "$(read_config 'c.remotePaths.evaluation')")"; heimdall_path="$(experiment_remote_path "$(read_config 'c.remotePaths.heimdall')")"; notification_aggregator_path="$(experiment_remote_path "$(read_config 'c.remotePaths.notificationAggregator')")"; rsp_js_path="$(experiment_remote_path "$(read_config 'c.remotePaths.rspJs')")"; replayer_path="$(experiment_remote_path "$(read_config 'c.remotePaths.replayer')")"
+evaluation_sha="${EVALUATION_REPOSITORY_SHA_EXPECTED:-$(git rev-parse HEAD)}"; heimdall_sha="${HEIMDALL_REPOSITORY_SHA_EXPECTED:-aa4a674ca03c7eb5a0e0e626ea5a8b3d190a9fef}"; notification_aggregator_sha="${NOTIFICATION_AGGREGATOR_REPOSITORY_SHA_EXPECTED:-}"; rsp_js_sha="${RSP_JS_SHA_EXPECTED:-$(git -C "$root/../RSP-JS" rev-parse HEAD)}"; replayer_sha="${REPLAYER_REPOSITORY_SHA_EXPECTED:-$(git -C "$root/../kvasir-replayer" rev-parse HEAD)}"
 launcher="src/experiments/clients/$approach/launcher.ts"; run_id="${EXPERIMENT_RUN_ID:-$(date -u +%Y%m%dT%H%M%SZ)}"; output_root="results/4hz/$approach/clients-$client_count/run-$run_id"
 client_config_path="${EXPERIMENT_CLIENT_CONFIG_PATH:-}"
 solid_initialize="cd \"$evaluation_path\" && EXPERIMENT_CONFIG_PATH=\"$client_config_path\" npx ts-node initialise-LDES.ts"; solid_cleanup="${SOLID_CLEANUP_COMMAND:-<SOLID_CLEANUP_COMMAND is required>}"; replayer_start="${REPLAYER_START_COMMAND:-<REPLAYER_START_COMMAND is required>}"
@@ -25,14 +25,19 @@ service_results_root="$heimdall_path/.evaluation-results/$run_id"
 service_iteration_dir="$service_results_root/iteration-XX"
 heimdall_pid_file="$service_results_root/heimdall.pid"
 case "$approach" in
-  notification-aggregator) service_host="$(read_config 'c.hosts.notificationAggregator')"; service_start="${NOTIFICATION_AGGREGATOR_START_COMMAND:-<NOTIFICATION_AGGREGATOR_START_COMMAND is required>}"; service_sha="${NOTIFICATION_AGGREGATOR_REPOSITORY_SHA_EXPECTED:-}" ;;
+  notification-aggregator) service_host="$(read_config 'c.hosts.notificationAggregator')"; service_start="${NOTIFICATION_AGGREGATOR_START_COMMAND:-<NOTIFICATION_AGGREGATOR_START_COMMAND is required>}"; service_sha="$notification_aggregator_sha"; service_repository_path="$notification_aggregator_path" ;;
   heimdall)
     service_host="$(read_config 'c.hosts.heimdall')"
     service_start="${HEIMDALL_START_COMMAND:-<HEIMDALL_START_COMMAND is required>}"
-    service_sha="$heimdall_sha"
+    service_sha="$heimdall_sha"; service_repository_path="$heimdall_path"
     ;;
-  without-aggregator) service_host="none"; service_start=":"; service_sha="" ;;
+  without-aggregator) service_host="none"; service_start=":"; service_sha=""; service_repository_path="" ;;
 esac
+if [[ "$service_host" != "none" ]]; then
+  service_results_root="$service_repository_path/.evaluation-results/$run_id"
+  service_iteration_dir="$service_results_root/iteration-XX"
+  heimdall_pid_file="$service_results_root/heimdall.pid"
+fi
 
 command_required() { [[ "$1" == "<"*" is required>" ]]; }
 remote_path_expression() {
@@ -78,8 +83,8 @@ csv_operation_count_command() {
 service_resource_header='timestamp,cpu_user_jiffies,cpu_system_jiffies,rss_bytes,wall_delta_ms,cpu_utilization_percent'
 service_launch_command() {
   local iteration_dir="$1"
-  printf 'mkdir -p %s; printf "%s\\n" > %s; setsid bash -c %s > %s/service.log 2>&1 & service_pid=\$!; printf "%%s\\n" "\$service_pid" > %s/service.pid; wait "\$service_pid"' \
-    "$(remote_path_expression "$service_results_root/$iteration_dir")" "$service_resource_header" "$(remote_path_expression "$service_results_root/$iteration_dir/service-resource.csv")" "$service_start_exec_quoted" "$(remote_path_expression "$service_results_root/$iteration_dir")" "$(remote_path_expression "$service_results_root/$iteration_dir")"
+  printf 'mkdir -p %s; printf "%s\\n" > %s; setsid bash -c %s > %s/service.log 2>&1 & service_pgid=\$!; printf "%%s\\n" "\$service_pgid" > %s/service.pgid; service_pid="\$service_pgid"; for attempt in $(seq 1 30); do descendants="\$service_pgid"; while test -n "\$descendants"; do next=""; for candidate in \$descendants; do if test "$(ps -o comm= -p "\$candidate" 2>/dev/null | tr -d " ")" = node; then service_pid="\$candidate"; descendants=""; break; fi; next="\$next $(pgrep -P "\$candidate" 2>/dev/null || true)"; done; descendants="\$next"; done; test "\$service_pid" != "\$service_pgid" && break; sleep 1; done; printf "%%s\\n" "\$service_pid" > %s/service.pid; wait "\$service_pgid"' \
+    "$(remote_path_expression "$service_results_root/$iteration_dir")" "$service_resource_header" "$(remote_path_expression "$service_results_root/$iteration_dir/service-resource.csv")" "$service_start_exec_quoted" "$(remote_path_expression "$service_results_root/$iteration_dir")" "$(remote_path_expression "$service_results_root/$iteration_dir")" "$(remote_path_expression "$service_results_root/$iteration_dir")"
 }
 service_monitor_command() {
   local iteration_dir="$1"
@@ -110,8 +115,8 @@ print_plan() {
   echo "approach=$approach frequencyHz=$frequency clientCount=$client_count iterations=$iterations durationSeconds=$duration"
   echo "ssh=user:$SSH_USER bastion:${SSH_BASTION:-none} identity:${SSH_IDENTITY_FILE:+configured} timeout:${SSH_CONNECT_TIMEOUT_SECONDS}s"
   echo "machines: replayer=$replayer_host solidPod=$pod_host client=$client_host service=$service_host"
-  echo "remote-paths: evaluation=$evaluation_path heimdall=$heimdall_path rspJs=$rsp_js_path replayer=$replayer_path"
-  echo "expected-shas: evaluation=$evaluation_sha heimdall=$heimdall_sha rspJs=$rsp_js_sha replayer=$replayer_sha"
+  echo "remote-paths: evaluation=$evaluation_path heimdall=$heimdall_path notificationAggregator=$notification_aggregator_path rspJs=$rsp_js_path replayer=$replayer_path"
+  echo "expected-shas: evaluation=$evaluation_sha heimdall=$heimdall_sha notificationAggregator=$notification_aggregator_sha rspJs=$rsp_js_sha replayer=$replayer_sha"
   echo "output-root=$root/$output_root"
   echo "replayer-runtime: $replayer_runtime_root"
   echo "replayer-pid: $replayer_pid_file"
@@ -161,7 +166,6 @@ if [[ "$mode" == "--preflight" ]]; then
   done
   if [[ -w "$root" ]]; then echo "LOCAL OK: output root is writable ($root)"; else echo "LOCAL NOT WRITABLE: $root" >&2; failures=1; fi
   if [[ -n "$client_config_path" ]]; then echo "CLIENT CONFIG: $client_config_path"; else echo "CONFIG MISSING: EXPERIMENT_CLIENT_CONFIG_PATH (path on the client machine)" >&2; failures=1; fi
-  if [[ "$service_host" != "none" && -z "$service_sha" ]]; then echo "CONFIG MISSING: NOTIFICATION_AGGREGATOR_REPOSITORY_SHA_EXPECTED (explicit pinned service commit)" >&2; failures=1; fi
   for command in "$solid_cleanup" "$replayer_start"; do if command_required "$command"; then echo "CONFIG MISSING: ${command#<}" >&2; failures=1; fi; done
   if [[ "$service_host" != "none" ]] && command_required "$service_start"; then echo "CONFIG MISSING: ${service_start#<}" >&2; failures=1; fi
   remote_check "REPLAYER reachable/path/SHA/node" "$replayer_host" "test -d \"$replayer_path\" && test \"\$(git -C \"$replayer_path\" rev-parse HEAD)\" = \"$replayer_sha\" && command -v node && node --version" || failures=1
@@ -169,7 +173,7 @@ if [[ "$mode" == "--preflight" ]]; then
   remote_check "SOLID POD HTTP reachable" "$client_host" "command -v curl >/dev/null && curl --fail --silent --show-error --max-time 10 --output /dev/null \"$solid_pod_url\"" || failures=1
   remote_check "CLIENT reachable/evaluation-path/SHA/clean/node" "$client_host" "test -d \"$evaluation_path\" && test \"\$(git -C \"$evaluation_path\" rev-parse HEAD)\" = \"$evaluation_sha\" && test -z \"\$(git -C \"$evaluation_path\" status --porcelain -- src/experiments package.json package-lock.json tsconfig.experiments.json)\" && command -v node && node --version" || failures=1
   if [[ "$service_host" != "none" ]]; then
-    remote_check "SERVICE reachable/repos/SHAs/clean/node/RSP-JS sibling" "$service_host" "test -d \"$heimdall_path\" && test \"\$(git -C \"$heimdall_path\" rev-parse HEAD)\" = \"$service_sha\" && test -z \"\$(git -C \"$heimdall_path\" status --porcelain -- src package.json package-lock.json tsconfig.json)\" && test -d \"$rsp_js_path\" && test \"\$(git -C \"$rsp_js_path\" rev-parse HEAD)\" = \"$rsp_js_sha\" && test -z \"\$(git -C \"$rsp_js_path\" status --porcelain)\" && test \"\$(cd \"$heimdall_path/../RSP-JS\" && pwd)\" = \"\$(cd \"$rsp_js_path\" && pwd)\" && command -v node && node --version" || failures=1
+    remote_check "SERVICE reachable/repository/SHA/clean/node" "$service_host" "test -d \"$service_repository_path\" && test \"\$(git -C \"$service_repository_path\" rev-parse HEAD)\" = \"$service_sha\" && test -z \"\$(git -C \"$service_repository_path\" status --porcelain -- src package.json package-lock.json tsconfig.json)\" && command -v node && node --version" || failures=1
   fi
   print_plan
   exit "$failures"
@@ -182,7 +186,7 @@ cleanup() {
     experiment_ssh "$client_host" "if test -f \"$client_pid_file\"; then kill -TERM \$(cat \"$client_pid_file\") 2>/dev/null || true; rm -f \"$client_pid_file\"; fi" || true
   fi
   if [[ "$service_host" != "none" && "$approach" != "heimdall" ]]; then
-    experiment_ssh "$service_host" "if test -f \"$service_iteration_dir/service.pid\"; then pid=\$(cat \"$service_iteration_dir/service.pid\" 2>/dev/null || true); test -n \"\$pid\" && kill -TERM \"\$pid\" 2>/dev/null || true; rm -f \"$service_iteration_dir/service.pid\"; fi" || true
+    experiment_ssh "$service_host" "if test -f \"$service_iteration_dir/service.pgid\"; then pgid=\$(cat \"$service_iteration_dir/service.pgid\" 2>/dev/null || true); test -n \"\$pgid\" && kill -TERM -- \"-\$pgid\" 2>/dev/null || true; for attempt in 1 2 3 4 5; do kill -0 -- \"-\$pgid\" 2>/dev/null || break; sleep 1; done; if kill -0 -- \"-\$pgid\" 2>/dev/null; then kill -KILL -- \"-\$pgid\" 2>/dev/null || true; echo \"Notification Aggregator group \$pgid survived cleanup.\" >&2; exit 1; fi; fi; rm -f \"$service_iteration_dir/service.pid\" \"$service_iteration_dir/service.pgid\"" || true
   fi
   if [[ "$approach" == "heimdall" ]]; then
     experiment_ssh "$service_host" "if test -f \"$heimdall_pid_file\"; then pid=\$(cat \"$heimdall_pid_file\" 2>/dev/null || true); if test -n \"\$pid\" && kill -0 \"\$pid\" 2>/dev/null; then kill -TERM -- \"-\$pid\" 2>/dev/null || kill -TERM \"\$pid\" 2>/dev/null || true; for attempt in 1 2 3 4 5; do status=\$(ps -o stat= -p \"\$pid\" 2>/dev/null | tr -d ' ' || true); if test -z \"\$status\" || [[ \"\$status\" == Z* ]]; then break; fi; sleep 1; done; status=\$(ps -o stat= -p \"\$pid\" 2>/dev/null | tr -d ' ' || true); if test -n \"\$status\" && [[ \"\$status\" != Z* ]]; then kill -KILL -- \"-\$pid\" 2>/dev/null || kill -KILL \"\$pid\" 2>/dev/null || true; fi; fi; rm -f \"$heimdall_pid_file\"; status=\$(ps -o stat= -p \"\$pid\" 2>/dev/null | tr -d ' ' || true); if test -n \"\$status\" && [[ \"\$status\" != Z* ]]; then echo \"Heimdall run PID \$pid is still running after cleanup.\" >&2; exit 1; fi; fi"

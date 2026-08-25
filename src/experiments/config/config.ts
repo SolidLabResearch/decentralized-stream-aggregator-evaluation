@@ -5,7 +5,7 @@ export interface ExperimentConfig {
     experiment: { frequencyHz: number; clientCount: number; iterations: number; durationSeconds: number; resourceSamplingIntervalMs: number };
     ssh: { user: string; bastion: string | null; identityFile: string | null; connectTimeoutSeconds: number };
     hosts: { replayer: string; solidPod: string; client: string; heimdall: string; notificationAggregator: string };
-    remotePaths: { evaluation: string; heimdall: string; rspJs: string; replayer: string };
+    remotePaths: { evaluation: string; heimdall: string; notificationAggregator: string; rspJs: string; replayer: string };
     urls: { solidPod: string; heimdall: string; notificationAggregator: string; clientCallbackHost: string };
     streams: { x: string; y: string; z: string };
 }

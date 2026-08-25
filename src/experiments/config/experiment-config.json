@@ -22,6 +22,7 @@
   "remotePaths": {
     "evaluation": "~/experiments/decentralized-stream-aggregator-evaluation",
     "heimdall": "~/experiments/heimdall",
+    "notificationAggregator": "~/experiments/solid-notifications-aggregator",
     "rspJs": "~/experiments/RSP-JS",
     "replayer": "~/experiments/replayer"
   },
