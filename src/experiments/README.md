@@ -7,19 +7,34 @@ increasing-client experiments. It calls the former Aggregator approach
 
 The three supported approaches are `heimdall`, `notification-aggregator`, and
 `without-aggregator`. Only 4 Hz is supported. The loader rejects another
-frequency, client counts outside 1--10, and non-positive iteration/duration
+frequency, client counts outside 1--30, and non-positive iteration/duration
 values.
 
-Edit `config/experiment-config.json` to set `experiment.clientCount`: `1`,
-`5`, and `10` launch one, five, and ten independently forked client processes,
-respectively. The committed defaults are 4 Hz, one client, 35 iterations, and
+Set `experiment.clientCount` to `2` for the smoke test, or to a final matrix
+count of `1`, `5`, `10`, `20`, or `30`. Each value launches that many
+independently forked client processes on the same client host. The committed defaults are 4 Hz, one client, 35 iterations, and
 720 seconds. Hosts, service URLs, streams, and the 500 ms resource-sampling
 interval are also centralized there.
 
-Each child writes `client-N-resource.csv` containing timestamp, CPU user/system
-time, RSS, heap total/used, and external memory. It also writes per-client
-results and timing CSVs. Output lives under
+Each child writes `client-N-resource.csv` containing the original cumulative
+CPU counters plus additive delta/utilization columns, RSS, heap total/used, and
+external memory. The launcher writes `client-host-resource.csv` from
+`/proc/stat` and `/proc/meminfo`. It also writes per-client results and timing
+CSVs. Output lives under
 `results/4hz/<approach>/clients-N/iteration-XX/`, along with `metadata.json`.
+
+The empirical experiment is colocated concurrent-client scaling: one repetition
+is the independent unit, and all clients share the configured client host. It is
+separate from the theoretical distributed `R_s + nR_c` analysis. Final batches
+use 35 repetitions and retain iterations 04--33 (N=30 repetitions).
+
+`registration_to_first_result` is client-local. Heimdall requires an explicit
+query-ready acknowledgement; Notifications Aggregator requires an explicit
+per-stream subscription-ready acknowledgement for all three streams; the
+without-aggregator client starts after all three successful Solid subscription
+establishment responses. The first-result marker is written only when that same
+client observes its first result. These boundaries are never computed from
+cross-machine clocks and are distinct from canonical `r2r_first_result`.
 
 Run the four-machine orchestration from the repository root:
 

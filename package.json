@@ -8,7 +8,9 @@
     "benchmark:init:provision": "node src/initialization-benchmark/provision-service-description.js",
     "analyze:initialization-benchmark": "node src/initialization-benchmark/analyze.js",
     "test:component-latency": "node analysis/component-latency/test.js",
-    "analyze:component-latency": "node analysis/component-latency/analyze.js"
+    "analyze:component-latency": "node analysis/component-latency/analyze.js",
+    "validate:empirical-scaling": "ts-node src/experiments/validation/multi-client-repetition.ts",
+    "analyze:empirical-scaling": "node analysis/empirical-scaling/analyze.js"
   },
   "dependencies": {
     "@inrupt/solid-client-authn-core": "^1.17.5",

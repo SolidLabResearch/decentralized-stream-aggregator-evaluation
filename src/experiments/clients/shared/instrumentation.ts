@@ -3,14 +3,14 @@ import * as fs from "fs";
 import * as path from "path";
 
 export const RSP_JS_EVALUATION_SHA = "45112d2955b99796d234747db34bd6804939e69a";
-export const HEIMDALL_EVALUATION_SHA = "575f1614aeb0841f6b4874b6e069a76b1db998b2";
+export const HEIMDALL_EVALUATION_SHA = "aa4a674ca03c7eb5a0e0e626ea5a8b3d190a9fef";
 export const MAX_OUT_OF_ORDERNESS_MS = 30_000;
 
 export type Operation = "service_discovery" | "stream_discovery" | "query_reuse_check" |
     "service_authentication" | "service_authorization" | "query_registration" |
     "stream_subscription" | "websocket_message" | "event_retrieval" |
     "parsing_timestamp_extraction" | "rsp_insertion" | "r2r_first_result" | "window_query_processing" |
-    "result_delivery";
+    "result_delivery" | "registration_to_first_result";
 
 export interface Context { runId: string; approach: string; clientId: string; queryId: string; }
 export interface Timing extends Partial<Pick<Context, "queryId">> {
@@ -33,6 +33,8 @@ export class RawInstrumentation {
     private readonly ooo: fs.WriteStream;
     private readonly epochAnchorMs = Date.now();
     private readonly monotonicAnchorNs = process.hrtime.bigint();
+    private readyAt?: { epochMs: number; monotonicNs: bigint; boundary: string };
+    private firstResultObserved = false;
 
     public constructor(private readonly outputDirectory: string, public readonly context: Context) {
         this.timings = fs.createWriteStream(path.join(outputDirectory, `client-${context.clientId}-operations.csv`), { flags: "w" });
@@ -57,6 +59,23 @@ export class RawInstrumentation {
             const start = BigInt(metric.start_monotonic_ns); const end = BigInt(metric.end_monotonic_ns);
             this.write({ operation: event, eventId: metric.event_id, streamId: metric.stream_id, windowId: metric.window_id, windowFromMs: metric.window_from_ms, windowToMs: metric.window_to_ms, windowSize: metric.window_size, startEpochMs: this.epochFor(start), endEpochMs: this.epochFor(end), startMonotonicNs: start, endMonotonicNs: end });
         }
+    }
+    public markReady(boundary: string): void {
+        if (this.readyAt) throw new Error(`Client ${this.context.clientId} readiness was recorded twice.`);
+        this.readyAt = { ...this.now(), boundary };
+        const marker = path.join(this.outputDirectory, `client-${this.context.clientId}-ready.json`);
+        fs.writeFileSync(`${marker}.tmp`, JSON.stringify({ ...this.context, boundary, ready_epoch_ms: this.readyAt.epochMs, ready_monotonic_ns: this.readyAt.monotonicNs.toString() }) + "\n");
+        fs.renameSync(`${marker}.tmp`, marker);
+    }
+    public observeFirstResult(): void {
+        if (this.firstResultObserved) return;
+        if (!this.readyAt) throw new Error(`Client ${this.context.clientId} received a result before confirmed readiness.`);
+        const end = this.now();
+        this.write({ operation: "registration_to_first_result", startEpochMs: this.readyAt.epochMs, endEpochMs: end.epochMs, startMonotonicNs: this.readyAt.monotonicNs, endMonotonicNs: end.monotonicNs });
+        const marker = path.join(this.outputDirectory, `client-${this.context.clientId}-first-result.ready`);
+        fs.writeFileSync(`${marker}.tmp`, `${this.context.runId},${this.context.clientId},${end.epochMs},${end.monotonicNs}\n`);
+        fs.renameSync(`${marker}.tmp`, marker);
+        this.firstResultObserved = true;
     }
     public async close(): Promise<void> {
         await Promise.all([new Promise<void>(resolve => this.timings.end(resolve)), new Promise<void>(resolve => this.ooo.end(resolve))]);

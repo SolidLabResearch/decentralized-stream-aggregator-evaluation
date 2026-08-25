@@ -19,4 +19,29 @@ All client-local records use `run_id, approach, client_id, query_id, event_id, s
 
 `--` means the operation is not implemented by that architecture or is not observable in the current client, not a zero-duration measurement. Notification delivery carries no retrieval request in this architecture, so it has no `event_retrieval` measurement. Locally evaluated results do not have an explicit service-to-client result-dispatch stage.
 
+## Colocated multi-client readiness
+
+The empirical colocated experiment adds `registration_to_first_result` without
+changing `r2r_first_result`. The start and end timestamps are both from the
+same client process monotonic clock. A client writes
+`client-N-first-result.ready` only after observing its first result binding.
+
+The readiness protocol is deliberately fail-closed:
+
+- Heimdall clients require a JSON acknowledgement such as
+  `{"type":"ready","status":"ready","query_id":"..."}` after the
+  service has accepted and initialized that query connection.
+- Notifications Aggregator clients require one explicit acknowledgement per
+  stream, such as
+  `{"type":"subscription_ready","stream":"..."}`, after the service's
+  `subscribe_inbox()` operation completes. Three WebSocket sends alone are not
+  sufficient.
+- Without Aggregator clients use the successful response from each Solid
+  subscription-establishment POST. The current code checks the HTTP 2xx result
+  returned by that establishment endpoint; it performs no duplicate event GET.
+
+The deployed Heimdall and Notifications Aggregator services must emit these
+acknowledgements before a smoke or final run. The evaluator does not infer
+readiness from a client send, a remote timestamp, or the first result itself.
+
 Out-of-order records are one logical event, never one RDF quad: `out_of_order_event` stores `event_id`, `lateness_ms`, `within_bound`, and `max_out_of_orderness_ms`. A late event is within the 30,000 ms bound when `lateness_ms <= 30000`.

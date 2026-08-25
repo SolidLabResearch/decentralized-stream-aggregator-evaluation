@@ -28,8 +28,8 @@ export function validateExperimentConfig(config: ExperimentConfig): ExperimentCo
     if (!config || typeof config !== "object") throw new Error("Invalid experiment configuration: expected an object.");
     if (!config.experiment || !config.ssh || !config.hosts || !config.remotePaths || !config.urls || !config.streams) throw new Error("Invalid experiment configuration: missing a required section.");
     if (config.experiment.frequencyHz !== 4) throw new Error(`Unsupported frequencyHz ${config.experiment.frequencyHz}. Only 4 Hz is supported by this framework.`);
-    if (!Number.isInteger(config.experiment.clientCount) || config.experiment.clientCount < 1 || config.experiment.clientCount > 10) {
-        throw new Error("Invalid experiment configuration: clientCount must be an integer from 1 through 10.");
+    if (!Number.isInteger(config.experiment.clientCount) || config.experiment.clientCount < 1 || config.experiment.clientCount > 30) {
+        throw new Error("Invalid experiment configuration: clientCount must be an integer from 1 through 30.");
     }
     positiveInteger(config.experiment.iterations, "iterations");
     positiveInteger(config.experiment.durationSeconds, "durationSeconds");
