@@ -3,7 +3,7 @@ import * as path from "path";
 import { WebSocket } from "ws";
 import { LDESinLDP, LDPCommunication } from "@treecg/versionawareldesinldp";
 import { RDFStream, RSPEngine, RSPQLParser } from "rsp-js";
-import { loadExperimentConfig } from "../../config/config";
+import { loadExperimentConfig, resolveStreams, workloadInstance, workloadMode } from "../../config/config";
 import { buildActivityIndexQuery } from "../../config/query";
 import { monitorCurrentProcess } from "../../monitoring/process-monitor";
 import { clientRuntime } from "../shared/runtime";
@@ -12,7 +12,7 @@ import { insertParsedNotificationEvent, NotificationEventMessage, parseNotificat
 
 const config = loadExperimentConfig();
 const { clientIndex, outputDirectory, runId } = clientRuntime();
-const query = buildActivityIndexQuery(config.streams);
+const query = buildActivityIndexQuery(resolveStreams(config), { workloadMode: workloadMode(config), workloadInstance: workloadInstance(config) });
 const queryId = sha256(query);
 const stagedArrival = config.experiment.clientArrivalMode === "staged-reuse";
 const clientRole: ClientRole | undefined = stagedArrival ? (clientIndex === 0 ? "cold" : "join") : undefined;

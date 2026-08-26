@@ -1,7 +1,7 @@
 import { ChildProcess, fork } from "child_process";
 import * as fs from "fs";
 import * as path from "path";
-import { loadExperimentConfig } from "../../config/config";
+import { loadExperimentConfig, replayerDataVariant, resolveStreams, workloadInstance, workloadMode, workloadVariants } from "../../config/config";
 import { sha256 } from "./instrumentation";
 import { monitorHostResources } from "../../monitoring/host-monitor";
 
@@ -55,24 +55,33 @@ export function launchConfiguredClients(approach: Approach, clientModule: string
     const skipHostMonitor = process.argv.includes("--skip-host-monitor");
     const outputDirectory = path.resolve(requestedOutput || path.join("results", "4hz", approach, `clients-${config.experiment.clientCount}`, `iteration-${iteration}-${Date.now()}`));
     fs.mkdirSync(outputDirectory, { recursive: true });
-    const query = require("../../config/query").buildActivityIndexQuery(config.streams);
+    const instance = workloadInstance(config);
+    const variants = workloadVariants(config);
+    const queryByClient = Object.fromEntries(clientIndices.map((clientIndex) => {
+        const streams = resolveStreams(config, instance);
+        const query = require("../../config/query").buildActivityIndexQuery(streams, { workloadMode: workloadMode(config), workloadInstance: instance });
+        return [clientIndex, { queryText: query, queryHash: sha256(query), streams }];
+    }));
     const metadataPath = path.join(outputDirectory, "metadata.json");
     const existingMetadata = fs.existsSync(metadataPath) ? JSON.parse(fs.readFileSync(metadataPath, "utf8")) as Record<string, any> : {};
     const previousLaunches = Array.isArray(existingMetadata.launches) ? existingMetadata.launches : [];
     const previousClientIds = Array.isArray(existingMetadata.launchedClientIds) ? existingMetadata.launchedClientIds : [];
-    const architectureBehavior = approach === "heimdall" ? "shared_query_reuse" : approach === "notification-aggregator" ? "shared_upstream_reuse" : "independent_processing";
+    const architectureBehavior = config.experiment.workloadMode !== undefined && config.experiment.clientCount === 1 ? "single_client_workload_composition" : approach === "heimdall" ? "shared_query_reuse" : approach === "notification-aggregator" ? "shared_upstream_reuse" : "independent_processing";
     fs.writeFileSync(metadataPath, JSON.stringify({
         ...existingMetadata,
         run_id: process.env.EXPERIMENT_RUN_ID || path.basename(outputDirectory),
         approach, frequencyHz: config.experiment.frequencyHz, clientCount: config.experiment.clientCount,
         clientArrivalMode: config.experiment.clientArrivalMode,
+        workloadMode: workloadMode(config),
+        workloadInstance: instance, queryVariant: variants.queryVariant, dataVariant: variants.dataVariant, replayerDataVariant: replayerDataVariant(config),
         arrivalMode: config.experiment.clientArrivalMode === "staged-reuse" ? "staged" : "simultaneous", architectureBehavior,
         launchedClientIds: Array.from(new Set([...previousClientIds, ...clientIndices])).sort((a, b) => a - b),
         launches: [...previousLaunches, { clientIds: clientIndices, timestamp: new Date().toISOString() }],
         iteration, durationSeconds: config.experiment.durationSeconds,
         resourceSamplingIntervalMs: config.experiment.resourceSamplingIntervalMs, startTimestamp: existingMetadata.startTimestamp || new Date().toISOString(),
-        hosts: config.hosts, streams: config.streams, serviceUrls: config.urls, nodeVersion: process.version,
-        queryText: query, queryHash: sha256(query), evaluationRepositorySha: process.env.EVALUATION_REPOSITORY_SHA || "unknown",
+        hosts: config.hosts, streams: resolveStreams(config, instance), streamTriplet: resolveStreams(config, instance), clientWorkloads: queryByClient, serviceUrls: config.urls, nodeVersion: process.version,
+        queryText: queryByClient[0]?.queryText,
+        queryHash: queryByClient[0]?.queryHash, evaluationRepositorySha: process.env.EVALUATION_REPOSITORY_SHA || "unknown",
         rspJsSha: process.env.RSP_JS_REPOSITORY_SHA || "45112d2955b99796d234747db34bd6804939e69a", serviceSha: process.env.SERVICE_REPOSITORY_SHA || undefined,
         max_out_of_orderness_ms: 30000, clockSynchronization: { status: "unverified", crossMachineMetrics: "unavailable until pre-run clock evidence is collected" }
     }, null, 2) + "\n");

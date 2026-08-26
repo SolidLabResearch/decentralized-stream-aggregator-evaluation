@@ -27,10 +27,15 @@ export function validateMultiClientRepetition(iterationDirectory: string, approa
     const metadataPath = path.join(iterationDirectory, "metadata.json");
     let stagedArrival = false;
     let stagedReuse = false;
+    let configuredWorkload = "same-query-same-data";
+    let clientWorkloads: Record<string, { queryHash?: string; queryText?: string }> = {};
     let replayStartEpochMs: number | undefined;
     if (fs.existsSync(metadataPath)) {
         try {
-            const arrivalMode = JSON.parse(fs.readFileSync(metadataPath, "utf8")).clientArrivalMode;
+            const metadata = JSON.parse(fs.readFileSync(metadataPath, "utf8"));
+            const arrivalMode = metadata.clientArrivalMode;
+            configuredWorkload = metadata.workloadMode || configuredWorkload;
+            clientWorkloads = metadata.clientWorkloads || {};
             if (arrivalMode === "staged-reuse" && approach !== "heimdall" && approach !== "notification-aggregator") errors.push("staged-reuse is supported only for Heimdall or Notification Aggregator");
             stagedArrival = arrivalMode === "staged-reuse";
             stagedReuse = approach === "heimdall" && stagedArrival;
@@ -76,7 +81,8 @@ export function validateMultiClientRepetition(iterationDirectory: string, approa
         if (fs.existsSync(results) && rows(results).length === 0) errors.push(`${results} has no result observation`);
         if (!fs.existsSync(operations)) continue;
         const operationRows = rows(operations);
-        if (approach === "heimdall" && operationRows.some(row => row.client_id !== String(client) || row.query_id !== CANONICAL_HEIMDALL_QUERY_SHA256)) errors.push(`non-canonical Heimdall client provenance for client ${client}`);
+        const expectedClientQuery = clientWorkloads[String(client)]?.queryHash || (configuredWorkload === "same-query-same-data" ? CANONICAL_HEIMDALL_QUERY_SHA256 : undefined);
+        if (approach === "heimdall" && operationRows.some(row => row.client_id !== String(client) || (expectedClientQuery !== undefined && row.query_id !== expectedClientQuery))) errors.push(`invalid Heimdall client provenance for client ${client}`);
         const expectedOperation = stagedReuse ? (client === 0 ? "cold_registration_to_first_result" : "reuse_registration_to_first_result") : stagedArrival ? (client === 0 ? "cold_registration_to_first_result" : "join_registration_to_first_result") : "registration_to_first_result";
         const first = operationRows.filter((row) => row.operation === expectedOperation);
         if (first.length !== 1 || first.some((row) => row.client_id !== String(client) || (stagedArrival && row.client_role !== (client === 0 ? "cold" : stagedReuse ? "reuse" : "join")) || !Number.isFinite(Number(row.duration_ms)) || Number(row.duration_ms) < 0 || BigInt(row.end_monotonic_ns || "-1") < BigInt(row.start_monotonic_ns || "0"))) errors.push(`invalid ${expectedOperation} for client ${client}`);
@@ -130,19 +136,26 @@ export function validateMultiClientRepetition(iterationDirectory: string, approa
         const metadataPath = path.join(iterationDirectory, "metadata.json");
         const initialization = path.join(iterationDirectory, "service", "initialization.csv"); const service = path.join(iterationDirectory, "service", "window-processing.csv");
         requireFile(initialization, errors); requireFile(service, errors);
-        let reuseKey = "";
-        if (fs.existsSync(metadataPath)) { try { const metadata = JSON.parse(fs.readFileSync(metadataPath, "utf8")); if (metadata.queryHash !== CANONICAL_HEIMDALL_QUERY_SHA256 || typeof metadata.queryText !== "string") errors.push("Heimdall metadata does not contain the expected canonical query hash/text"); else reuseKey = heimdallReuseKey(metadata.queryText); } catch { errors.push("invalid Heimdall metadata.json"); } }
-        if (fs.existsSync(initialization) && reuseKey) {
-            const serviceRows = rows(initialization).filter(row => row.query_id === reuseKey);
-            const created = serviceRows.filter(row => row.operation === "shared_query_instance_created"); const reused = serviceRows.filter(row => row.operation === "shared_query_instance_reused");
-            if (created.length !== 1) errors.push(`expected exactly one shared Heimdall query instance for ${reuseKey}, found ${created.length}`);
-            if (stagedReuse ? reused.length !== clientCount - 1 : reused.length < clientCount - 1) errors.push(`expected ${stagedReuse ? "exactly" : "at least"} ${clientCount - 1} Heimdall reuse attachment events, found ${reused.length}`);
-            if (stagedReuse && serviceRows.filter(row => row.operation === "query_registration").length !== clientCount) errors.push(`expected exactly ${clientCount} staged Heimdall query registrations`);
-            const clients = new Set([...created, ...reused].map(row => row.client_id));
-            for (let client = 0; client < clientCount; client += 1) if (!clients.has(String(client))) errors.push(`Heimdall client ${client} was not associated with the shared query`);
-            if (stagedReuse && serviceRows.filter(row => row.operation === "stream_subscription").length !== 3) errors.push(`expected exactly three shared Heimdall upstream stream subscriptions, found ${serviceRows.filter(row => row.operation === "stream_subscription").length}`);
+        const expectedQueries = Object.values(clientWorkloads).map(value => value.queryText).filter((value): value is string => typeof value === "string");
+        const queries = expectedQueries.length ? expectedQueries : fs.existsSync(metadataPath) ? [JSON.parse(fs.readFileSync(metadataPath, "utf8")).queryText].filter((value): value is string => typeof value === "string") : [];
+        if (!queries.length) errors.push("Heimdall metadata does not contain query text needed for service-side execution validation");
+        if (fs.existsSync(initialization) && queries.length) {
+            const uniqueKeys = [...new Set(queries.map(heimdallReuseKey))];
+            const allRows = rows(initialization);
+            for (const key of uniqueKeys) {
+                const serviceRows = allRows.filter(row => row.query_id === key);
+                const created = serviceRows.filter(row => row.operation === "shared_query_instance_created"); const reused = serviceRows.filter(row => row.operation === "shared_query_instance_reused");
+                if (created.length !== 1) errors.push(`expected exactly one Heimdall execution for ${key}, found ${created.length}`);
+                if (uniqueKeys.length === 1 && (stagedReuse ? reused.length !== clientCount - 1 : reused.length < clientCount - 1)) errors.push(`expected ${stagedReuse ? "exactly" : "at least"} ${clientCount - 1} Heimdall reuse attachment events, found ${reused.length}`);
+            }
+            const serviceClients = new Set(allRows.filter(row => row.operation === "shared_query_instance_created" || row.operation === "shared_query_instance_reused").map(row => row.client_id));
+            for (let client = 0; client < clientCount; client += 1) if (!serviceClients.has(String(client))) errors.push(`Heimdall client ${client} was not associated with a service query execution`);
+            if (uniqueKeys.length > 1 && allRows.filter(row => row.operation === "shared_query_instance_created").length !== uniqueKeys.length) errors.push(`expected ${uniqueKeys.length} independent Heimdall query executions`);
+            if (stagedReuse && allRows.filter(row => row.operation === "query_registration").length !== clientCount) errors.push(`expected exactly ${clientCount} staged Heimdall query registrations`);
+            if (stagedReuse && uniqueKeys.length === 1 && allRows.filter(row => row.operation === "stream_subscription").length !== 3) errors.push(`expected exactly three shared Heimdall upstream stream subscriptions, found ${allRows.filter(row => row.operation === "stream_subscription").length}`);
         }
-        if (fs.existsSync(service) && rows(service).filter(row => row.operation === "r2r_first_result" && isCanonicalW1WindowId(row.window_id)).length !== 1) errors.push("Heimdall must have exactly one shared service-side canonical W1 r2r_first_result");
+        const expectedServiceResults = configuredWorkload === "same-query-same-data" ? 1 : clientCount;
+        if (fs.existsSync(service) && rows(service).filter(row => row.operation === "r2r_first_result" && isCanonicalW1WindowId(row.window_id)).length < expectedServiceResults) errors.push(`Heimdall requires at least ${expectedServiceResults} service-side canonical W1 r2r_first_result records`);
     }
     if (approach === "notification-aggregator" && stagedArrival) {
         const serviceLog = path.join(iterationDirectory, "service", "service.log");

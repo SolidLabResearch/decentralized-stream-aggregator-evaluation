@@ -1,13 +1,18 @@
 import * as fs from "fs";
 import * as path from "path";
 
+export type WorkloadMode = "same-query-same-data" | "different-query-same-data" | "different-query-different-data";
+export type WorkloadInstance = 0 | 1 | 2;
+export interface StreamTriplet { x: string; y: string; z: string; }
+
 export interface ExperimentConfig {
-    experiment: { frequencyHz: number; clientCount: number; iterations: number; durationSeconds: number; resourceSamplingIntervalMs: number; clientArrivalMode: "simultaneous" | "staged-reuse" };
+    experiment: { frequencyHz: number; clientCount: number; iterations: number; durationSeconds: number; resourceSamplingIntervalMs: number; clientArrivalMode: "simultaneous" | "staged-reuse"; workloadMode?: WorkloadMode; workloadInstance?: WorkloadInstance; replayerDataVariant?: "A" | "B" | "C" };
     ssh: { user: string; bastion: string | null; identityFile: string | null; connectTimeoutSeconds: number };
     hosts: { replayer: string; solidPod: string; client: string; heimdall: string; notificationAggregator: string };
     remotePaths: { evaluation: string; heimdall: string; notificationAggregator: string; rspJs: string; replayer: string };
     urls: { solidPod: string; heimdall: string; notificationAggregator: string; clientCallbackHost: string };
-    streams: { x: string; y: string; z: string };
+    streams: StreamTriplet;
+    heterogeneousStreams?: StreamTriplet[];
 }
 
 export const defaultConfigPath = path.resolve(__dirname, "experiment-config.json");
@@ -32,6 +37,15 @@ export function validateExperimentConfig(config: ExperimentConfig): ExperimentCo
     if (config.experiment.clientArrivalMode !== "simultaneous" && config.experiment.clientArrivalMode !== "staged-reuse") {
         throw new Error(`Invalid experiment configuration: clientArrivalMode must be "simultaneous" or "staged-reuse".`);
     }
+    if (config.experiment.workloadMode !== undefined && !["same-query-same-data", "different-query-same-data", "different-query-different-data"].includes(config.experiment.workloadMode)) {
+        throw new Error('Invalid experiment configuration: workloadMode must be "same-query-same-data", "different-query-same-data", or "different-query-different-data".');
+    }
+    if (config.experiment.workloadInstance !== undefined && ![0, 1, 2].includes(config.experiment.workloadInstance)) {
+        throw new Error("Invalid experiment configuration: workloadInstance must be 0, 1, or 2.");
+    }
+    if (config.experiment.replayerDataVariant !== undefined && !["A", "B", "C"].includes(config.experiment.replayerDataVariant)) {
+        throw new Error("Invalid experiment configuration: replayerDataVariant must be A, B, or C.");
+    }
     if (!Number.isInteger(config.experiment.clientCount) || config.experiment.clientCount < 1 || config.experiment.clientCount > 30) {
         throw new Error("Invalid experiment configuration: clientCount must be an integer from 1 through 30.");
     }
@@ -47,7 +61,38 @@ export function validateExperimentConfig(config: ExperimentConfig): ExperimentCo
     Object.entries(config.remotePaths).forEach(([key, value]) => requiredString(value, `remotePaths.${key}`));
     Object.entries(config.urls).forEach(([key, value]) => requiredString(value, `urls.${key}`));
     Object.entries(config.streams).forEach(([key, value]) => requiredString(value, `streams.${key}`));
+    if (config.heterogeneousStreams !== undefined) {
+        if (!Array.isArray(config.heterogeneousStreams) || config.heterogeneousStreams.length === 0) throw new Error("Invalid experiment configuration: heterogeneousStreams must be a non-empty array of stream triplets.");
+        config.heterogeneousStreams.forEach((triplet, index) => {
+            if (!triplet || typeof triplet !== "object") throw new Error(`Invalid experiment configuration: heterogeneousStreams.${index} must be a stream triplet.`);
+            Object.entries(triplet).forEach(([key, value]) => requiredString(value, `heterogeneousStreams.${index}.${key}`));
+            if (!("x" in triplet) || !("y" in triplet) || !("z" in triplet)) throw new Error(`Invalid experiment configuration: heterogeneousStreams.${index} must contain x, y, and z.`);
+        });
+    }
     return config;
+}
+
+export function workloadMode(config: ExperimentConfig): WorkloadMode { return config.experiment.workloadMode || "same-query-same-data"; }
+export function workloadInstance(config: ExperimentConfig): WorkloadInstance { return config.experiment.workloadInstance ?? 0; }
+
+export function resolveStreams(config: ExperimentConfig, instance: number = workloadInstance(config)): StreamTriplet {
+    if (!Number.isInteger(instance) || instance < 0 || instance > 2) throw new Error("Invalid workload instance; expected 0, 1, or 2.");
+    if (workloadMode(config) !== "different-query-different-data") return config.streams;
+    if (!config.heterogeneousStreams || config.heterogeneousStreams.length < 3) throw new Error("workloadMode=different-query-different-data requires three heterogeneous stream triplets.");
+    return config.heterogeneousStreams[instance];
+}
+
+export function workloadVariants(config: ExperimentConfig): { queryVariant: "Q0" | "Q1" | "Q2"; dataVariant: "A" | "B" | "C" } {
+    const instance = workloadInstance(config);
+    const queryVariant = workloadMode(config) === "same-query-same-data" ? "Q0" : (`Q${instance}` as "Q0" | "Q1" | "Q2");
+    const dataVariant = workloadMode(config) === "different-query-different-data" ? (["A", "B", "C"] as const)[instance] : "A";
+    return { queryVariant, dataVariant };
+}
+
+export function replayerDataVariant(config: ExperimentConfig): "A" | "B" | "C" {
+    const expected = workloadVariants(config).dataVariant;
+    if (config.experiment.replayerDataVariant !== undefined && config.experiment.replayerDataVariant !== expected) throw new Error(`Invalid experiment configuration: replayerDataVariant ${config.experiment.replayerDataVariant} does not match data variant ${expected}.`);
+    return expected;
 }
 
 export function loadExperimentConfig(configPath = process.env.EXPERIMENT_CONFIG_PATH || defaultConfigPath): ExperimentConfig {

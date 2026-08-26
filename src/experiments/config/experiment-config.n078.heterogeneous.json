@@ -1,0 +1,27 @@
+{
+  "experiment": {
+    "frequencyHz": 4,
+    "clientCount": 1,
+    "iterations": 1,
+    "durationSeconds": 30,
+    "resourceSamplingIntervalMs": 500,
+    "clientArrivalMode": "simultaneous"
+  },
+  "ssh": { "user": "kbisenug", "bastion": null, "identityFile": null, "connectTimeoutSeconds": 10 },
+  "hosts": {
+    "replayer": "n078-06.wall1.ilabt.imec.be", "solidPod": "n078-03.wall1.ilabt.imec.be", "client": "n078-19.wall1.ilabt.imec.be",
+    "heimdall": "n078-22.wall1.ilabt.imec.be", "notificationAggregator": "n078-22.wall1.ilabt.imec.be"
+  },
+  "remotePaths": {
+    "evaluation": "~/experiments/decentralized-stream-aggregator-evaluation", "heimdall": "~/experiments/heimdall", "notificationAggregator": "~/experiments/solid-notifications-aggregator", "rspJs": "~/experiments/RSP-JS", "replayer": "~/experiments/replayer"
+  },
+  "urls": {
+    "solidPod": "http://n078-03.wall1.ilabt.imec.be:3000/pod1/", "heimdall": "ws://n078-22.wall1.ilabt.imec.be:8080/", "notificationAggregator": "ws://n078-22.wall1.ilabt.imec.be:8085/", "clientCallbackHost": "http://n078-19.wall1.ilabt.imec.be"
+  },
+  "streams": { "x": "http://n078-03.wall1.ilabt.imec.be:3000/pod1/heterogeneous/segment-01/acc-x/", "y": "http://n078-03.wall1.ilabt.imec.be:3000/pod1/heterogeneous/segment-01/acc-y/", "z": "http://n078-03.wall1.ilabt.imec.be:3000/pod1/heterogeneous/segment-01/acc-z/" },
+  "heterogeneousStreams": [
+    { "x": "http://n078-03.wall1.ilabt.imec.be:3000/pod1/heterogeneous/segment-01/acc-x/", "y": "http://n078-03.wall1.ilabt.imec.be:3000/pod1/heterogeneous/segment-01/acc-y/", "z": "http://n078-03.wall1.ilabt.imec.be:3000/pod1/heterogeneous/segment-01/acc-z/" },
+    { "x": "http://n078-03.wall1.ilabt.imec.be:3000/pod1/heterogeneous/segment-02/acc-x/", "y": "http://n078-03.wall1.ilabt.imec.be:3000/pod1/heterogeneous/segment-02/acc-y/", "z": "http://n078-03.wall1.ilabt.imec.be:3000/pod1/heterogeneous/segment-02/acc-z/" },
+    { "x": "http://n078-03.wall1.ilabt.imec.be:3000/pod1/heterogeneous/segment-03/acc-x/", "y": "http://n078-03.wall1.ilabt.imec.be:3000/pod1/heterogeneous/segment-03/acc-y/", "z": "http://n078-03.wall1.ilabt.imec.be:3000/pod1/heterogeneous/segment-03/acc-z/" }
+  ]
+}

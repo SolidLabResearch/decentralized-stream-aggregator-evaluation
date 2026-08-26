@@ -5,14 +5,14 @@ import axios from "axios";
 import { LDESinLDP, LDPCommunication } from "@treecg/versionawareldesinldp";
 import { RDFStream, RSPEngine, RSPQLParser } from "rsp-js";
 import { parseEvent, findStreamInbox, findSubscriptionEndpoint } from "./parsing";
-import { loadExperimentConfig } from "../../config/config";
+import { loadExperimentConfig, resolveStreams, workloadInstance, workloadMode } from "../../config/config";
 import { buildActivityIndexQuery } from "../../config/query";
 import { monitorCurrentProcess } from "../../monitoring/process-monitor";
 import { clientRuntime } from "../shared/runtime";
 import { MAX_OUT_OF_ORDERNESS_MS, RawInstrumentation, sha256 } from "../shared/instrumentation";
 
 const config = loadExperimentConfig();
-const { clientIndex, outputDirectory, runId } = clientRuntime(); const query = buildActivityIndexQuery(config.streams); const queryId = sha256(query);
+const { clientIndex, outputDirectory, runId } = clientRuntime(); const query = buildActivityIndexQuery(resolveStreams(config), { workloadMode: workloadMode(config), workloadInstance: workloadInstance(config) }); const queryId = sha256(query);
 const raw = new RawInstrumentation(outputDirectory, { runId, approach: "without-aggregator", clientId: String(clientIndex), queryId });
 const monitor = monitorCurrentProcess(path.join(outputDirectory, `client-${clientIndex}-resource.csv`), config.experiment.resourceSamplingIntervalMs);
 const results = fs.createWriteStream(path.join(outputDirectory, `client-${clientIndex}-results.csv`), { flags: "w" }); results.write("run_id,client_id,query_id,result_id,result_epoch_ms,payload_hash\n"); let resultId = 0; let server: http.Server | undefined; let shuttingDown = false;

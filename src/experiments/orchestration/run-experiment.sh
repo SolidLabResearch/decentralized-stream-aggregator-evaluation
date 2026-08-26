@@ -19,9 +19,9 @@ SSH_IDENTITY_FILE="${EXPERIMENT_SSH_IDENTITY_FILE:-$(read_config 'c.ssh.identity
 experiment_ssh_args
 evaluation_path="$(experiment_remote_path "$(read_config 'c.remotePaths.evaluation')")"; heimdall_path="$(experiment_remote_path "$(read_config 'c.remotePaths.heimdall')")"; notification_aggregator_path="$(experiment_remote_path "$(read_config 'c.remotePaths.notificationAggregator')")"; rsp_js_path="$(experiment_remote_path "$(read_config 'c.remotePaths.rspJs')")"; replayer_path="$(experiment_remote_path "$(read_config 'c.remotePaths.replayer')")"
 evaluation_sha="${EVALUATION_REPOSITORY_SHA_EXPECTED:-$(git rev-parse HEAD)}"; heimdall_sha="${HEIMDALL_REPOSITORY_SHA_EXPECTED:-32c9e3adc254cfd6f79eea71ab121b7bc344ae86}"; notification_aggregator_sha="${NOTIFICATION_AGGREGATOR_REPOSITORY_SHA_EXPECTED:-7623967531a4f8a9558c7a8fb91c4ab428199ef5}"; rsp_js_sha="${RSP_JS_SHA_EXPECTED:-56e773d8416f978d82a8288802532cabdf8ffef6}"; replayer_sha="${REPLAYER_REPOSITORY_SHA_EXPECTED:-a98ec1cba14f4437bb0bbefd915fb07e79a454fe}"
-launcher="src/experiments/clients/$approach/launcher.ts"; run_id="${EXPERIMENT_RUN_ID:-$(date -u +%Y%m%dT%H%M%SZ)}"; output_root="results/4hz/$approach/clients-$client_count/run-$run_id"
-client_config_path="${EXPERIMENT_CLIENT_CONFIG_PATH:-}"
-solid_initialize="cd \"$evaluation_path\" && EXPERIMENT_CONFIG_PATH=\"$client_config_path\" npx ts-node initialise-LDES.ts"; solid_cleanup="${SOLID_CLEANUP_COMMAND:-<SOLID_CLEANUP_COMMAND is required>}"; replayer_start="${REPLAYER_START_COMMAND:-<REPLAYER_START_COMMAND is required>}"
+launcher="src/experiments/clients/$approach/launcher.ts"; run_id="${EXPERIMENT_RUN_ID:-$(date -u +%Y%m%dT%H%M%SZ)}"; output_root="${EXPERIMENT_OUTPUT_ROOT:-results/4hz/$approach/clients-$client_count/run-$run_id}"
+client_config_path="${EXPERIMENT_CLIENT_CONFIG_PATH:-}"; config_overrides="${EXPERIMENT_CONFIG_OVERRIDES:-}"
+solid_cleanup="${SOLID_CLEANUP_COMMAND:-<SOLID_CLEANUP_COMMAND is required>}"; replayer_start="${REPLAYER_START_COMMAND:-<REPLAYER_START_COMMAND is required>}"
 service_results_root="$heimdall_path/.evaluation-results/$run_id"
 service_iteration_dir="$service_results_root/iteration-XX"
 heimdall_pid_file="$service_results_root/heimdall.pid"
@@ -58,6 +58,7 @@ shell_quote() {
   local value="$1"
   printf "'%s'" "${value//\'/\'\\\'\'}"
 }
+solid_initialize="cd \"$evaluation_path\" && EXPERIMENT_CONFIG_PATH=$(shell_quote "$client_config_path") EXPERIMENT_CONFIG_OVERRIDES=$(shell_quote "$config_overrides") npx ts-node initialise-LDES.ts"
 client_pid_file="$evaluation_path/.4hz-$approach-launcher.pid"
 client_phase_a_pid_file="$evaluation_path/.4hz-$approach-phase-a-launcher.pid"
 client_phase_b_pid_file="$evaluation_path/.4hz-$approach-phase-b-launcher.pid"
@@ -67,8 +68,8 @@ client_launch_command() {
   [[ -n "$client_ids" ]] && client_args+=" --client-ids $(shell_quote "$client_ids")"
   [[ -n "$launch_marker" ]] && client_args+=" --launch-marker $(shell_quote "$launch_marker")"
   [[ "$skip_host_monitor" == "true" ]] && client_args+=" --skip-host-monitor"
-  printf 'cd "%s" && (setsid env RSP_JS_DISABLE_LOGGING=1 EXPERIMENT_CONFIG_PATH=%s EXPERIMENT_RUN_ID=%s EVALUATION_REPOSITORY_SHA=%s RSP_JS_REPOSITORY_SHA=%s SERVICE_REPOSITORY_SHA=%s npx ts-node %s %s > "%s/%s" 2>&1 & client_pid=$!; printf '\''%%s\\n'\'' "$client_pid" > "%s"; wait "$client_pid")' \
-    "$evaluation_path" "$(shell_quote "$client_config_path")" "$(shell_quote "$iteration_run_id")" \
+  printf 'cd "%s" && (setsid env RSP_JS_DISABLE_LOGGING=1 EXPERIMENT_CONFIG_PATH=%s EXPERIMENT_CONFIG_OVERRIDES=%s EXPERIMENT_RUN_ID=%s EVALUATION_REPOSITORY_SHA=%s RSP_JS_REPOSITORY_SHA=%s SERVICE_REPOSITORY_SHA=%s npx ts-node %s %s > "%s/%s" 2>&1 & client_pid=$!; printf '\''%%s\\n'\'' "$client_pid" > "%s"; wait "$client_pid")' \
+    "$evaluation_path" "$(shell_quote "$client_config_path")" "$(shell_quote "$config_overrides")" "$(shell_quote "$iteration_run_id")" \
     "$(shell_quote "$evaluation_sha")" "$(shell_quote "$rsp_js_sha")" "$(shell_quote "$service_sha")" "$(shell_quote "$launcher")" "$client_args" "$iteration_output_dir" "$launcher_log" "$pid_file"
 }
 

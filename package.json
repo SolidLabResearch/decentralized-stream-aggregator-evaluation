@@ -1,7 +1,7 @@
 {
   "scripts": {
     "check:experiments": "tsc --project tsconfig.experiments.json --noEmit",
-    "test:experiments": "ts-node test/initialise-LDES.test.ts && ts-node test/experiments-hardening.test.ts",
+    "test:experiments": "ts-node test/initialise-LDES.test.ts && ts-node test/experiments-hardening.test.ts && ts-node test/heterogeneous-workloads.test.ts",
     "test:network-traffic": "ts-node test/network-traffic.test.ts",
     "test:without-aggregator": "ts-node test/without-aggregator-parsing.test.ts",
     "analyze:network-traffic": "ts-node src/experiments/network/analyze-network.ts",
@@ -13,7 +13,9 @@
     "test:component-latency": "node analysis/component-latency/test.js",
     "analyze:component-latency": "node analysis/component-latency/analyze.js",
     "validate:empirical-scaling": "ts-node src/experiments/validation/multi-client-repetition.ts",
-    "analyze:empirical-scaling": "node analysis/empirical-scaling/analyze.js"
+    "analyze:empirical-scaling": "node analysis/empirical-scaling/analyze.js",
+    "validate:heterogeneous-workloads": "ts-node src/experiments/validation/heterogeneous-workload.ts",
+    "analyze:heterogeneous-workloads": "node analysis/heterogeneous-workloads/analyze.js"
   },
   "dependencies": {
     "@inrupt/solid-client-authn-core": "^1.17.5",
