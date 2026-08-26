@@ -18,7 +18,7 @@ SSH_USER="${EXPERIMENT_SSH_USER:-$(read_config 'c.ssh.user')}"; SSH_BASTION="${E
 SSH_IDENTITY_FILE="${EXPERIMENT_SSH_IDENTITY_FILE:-$(read_config 'c.ssh.identityFile === null ? "" : c.ssh.identityFile')}"; SSH_CONNECT_TIMEOUT_SECONDS="${EXPERIMENT_SSH_CONNECT_TIMEOUT_SECONDS:-$(read_config 'c.ssh.connectTimeoutSeconds')}"
 experiment_ssh_args
 evaluation_path="$(experiment_remote_path "$(read_config 'c.remotePaths.evaluation')")"; heimdall_path="$(experiment_remote_path "$(read_config 'c.remotePaths.heimdall')")"; notification_aggregator_path="$(experiment_remote_path "$(read_config 'c.remotePaths.notificationAggregator')")"; rsp_js_path="$(experiment_remote_path "$(read_config 'c.remotePaths.rspJs')")"; replayer_path="$(experiment_remote_path "$(read_config 'c.remotePaths.replayer')")"
-evaluation_sha="${EVALUATION_REPOSITORY_SHA_EXPECTED:-$(git rev-parse HEAD)}"; heimdall_sha="${HEIMDALL_REPOSITORY_SHA_EXPECTED:-32c9e3adc254cfd6f79eea71ab121b7bc344ae86}"; notification_aggregator_sha="${NOTIFICATION_AGGREGATOR_REPOSITORY_SHA_EXPECTED:-7623967531a4f8a9558c7a8fb91c4ab428199ef5}"; rsp_js_sha="${RSP_JS_SHA_EXPECTED:-92a065c2db975f1ec06352521cd49be9e665b33d}"; replayer_sha="${REPLAYER_REPOSITORY_SHA_EXPECTED:-a98ec1cba14f4437bb0bbefd915fb07e79a454fe}"
+evaluation_sha="${EVALUATION_REPOSITORY_SHA_EXPECTED:-$(git rev-parse HEAD)}"; heimdall_sha="${HEIMDALL_REPOSITORY_SHA_EXPECTED:-32c9e3adc254cfd6f79eea71ab121b7bc344ae86}"; notification_aggregator_sha="${NOTIFICATION_AGGREGATOR_REPOSITORY_SHA_EXPECTED:-7623967531a4f8a9558c7a8fb91c4ab428199ef5}"; rsp_js_sha="${RSP_JS_SHA_EXPECTED:-56e773d8416f978d82a8288802532cabdf8ffef6}"; replayer_sha="${REPLAYER_REPOSITORY_SHA_EXPECTED:-a98ec1cba14f4437bb0bbefd915fb07e79a454fe}"
 launcher="src/experiments/clients/$approach/launcher.ts"; run_id="${EXPERIMENT_RUN_ID:-$(date -u +%Y%m%dT%H%M%SZ)}"; output_root="results/4hz/$approach/clients-$client_count/run-$run_id"
 client_config_path="${EXPERIMENT_CLIENT_CONFIG_PATH:-}"
 solid_initialize="cd \"$evaluation_path\" && EXPERIMENT_CONFIG_PATH=\"$client_config_path\" npx ts-node initialise-LDES.ts"; solid_cleanup="${SOLID_CLEANUP_COMMAND:-<SOLID_CLEANUP_COMMAND is required>}"; replayer_start="${REPLAYER_START_COMMAND:-<REPLAYER_START_COMMAND is required>}"
@@ -84,6 +84,23 @@ csv_operation_count_command() {
   local csv_path="$1" operation="$2"
   printf 'test -f %s && awk -F, '\''NR == 1 { for (i = 1; i <= NF; i++) if ($i == "operation") operation_column = i; next } operation_column && $operation_column == "%s" { count++ } END { exit !(count >= 1) }'\'' %s' \
     "$(remote_path_expression "$csv_path")" "$operation" "$(remote_path_expression "$csv_path")"
+}
+rsp_js_diagnostic_patterns=(
+  'Adding \[" \+ .* \] at time : .* and watermark'
+  'Watermark is not increasing'
+  'Logger initialized with log level'
+  'Error writing to file:'
+  'Invalid log destination:'
+)
+validate_rsp_js_diagnostics() {
+  local log_path="$1" pattern
+  [[ -f "$log_path" ]] || return 0
+  for pattern in "${rsp_js_diagnostic_patterns[@]}"; do
+    if grep -Eq "$pattern" "$log_path"; then
+      echo "RSP-JS diagnostic output detected in $log_path: $pattern" >&2
+      return 1
+    fi
+  done
 }
 service_resource_header='timestamp,cpu_user_jiffies,cpu_system_jiffies,rss_bytes,wall_delta_ms,cpu_utilization_percent'
 heimdall_rsp_js_preflight_command() {
@@ -373,5 +390,6 @@ for iteration in $(seq 1 "$iterations"); do
   fi
   npx --prefix "$root" ts-node src/experiments/network/collect-network.ts --output "$root/$iteration_dir/network.csv" --approach "$approach" --run-id "$run_id" --client-count "$client_count" --iteration "$iteration" --input-dir "$root/$iteration_dir/network"
   if [[ "$service_host" != "none" ]]; then experiment_scp_from "$service_host" "$service_iteration_dir" "$root/$iteration_dir/service"; if [[ -f "$root/$iteration_dir/service/resource.csv" ]]; then cp "$root/$iteration_dir/service/resource.csv" "$root/$iteration_dir/service-resource.csv"; elif [[ -f "$root/$iteration_dir/service/service-resource.csv" ]]; then cp "$root/$iteration_dir/service/service-resource.csv" "$root/$iteration_dir/service-resource.csv"; fi; fi
+  while IFS= read -r log_path; do validate_rsp_js_diagnostics "$log_path" || infrastructure_failed=true; done < <(find "$root/$iteration_dir" -type f -name '*.log' -print)
   [[ "$workload_failed" != true && "$infrastructure_failed" != true ]] || exit 1
 done

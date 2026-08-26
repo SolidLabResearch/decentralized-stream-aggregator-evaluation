@@ -372,6 +372,11 @@ NODE_DISCOVERY_MODE=child; export NODE_DISCOVERY_MODE; child_command=$(service_l
 NODE_DISCOVERY_MODE=none; export NODE_DISCOVERY_MODE; missing_command=$(service_launch_command iteration-missing); if bash -c "$missing_command" >"$root/missing.out" 2>"$root/missing.err"; then exit 1; fi; grep -F 'service launch: Node PID was not discovered within 1 seconds' "$root/missing.err" >/dev/null`, "service-launch-harness"], { cwd: path.resolve(__dirname, ".."), stdio: "ignore" });
     assert.match(clientLaunchFunction, /RSP_JS_DISABLE_LOGGING=1/);
     assert.match(runnerSource, /export RSP_JS_DISABLE_LOGGING=1 HEIMDALL_RESULTS_DIR=/);
+    assert.match(runnerSource, /rsp_js_diagnostic_patterns=\(/);
+    assert.match(runnerSource, /Adding .*at time : .*and watermark/);
+    assert.match(runnerSource, /Watermark is not increasing/);
+    assert.match(runnerSource, /validate_rsp_js_diagnostics/);
+    assert.match(runnerSource, /find "\$root\/\$iteration_dir" -type f -name '\*\.log'/);
     assert.doesNotMatch(clientLaunchFunction, /\\\$/);
     assert.doesNotMatch(serviceLaunchFunction, /\\\$/);
     const monitorWait = runnerSource.indexOf('if [[ -n "$service_monitor_pid" ]] && ! wait "$service_monitor_pid"');
