@@ -138,7 +138,8 @@ network_snapshot_command() {
     "$(shell_quote "$snapshot_file")" "$(shell_quote "$route_target")" "$(shell_quote "$override")" "$(shell_quote "$role")"
 }
 capture_network_snapshots() {
-  local phase="$1" iteration_label="$2" -a snapshot_pids=() snapshot_labels=()
+  local phase="$1" iteration_label="$2"
+  local -a snapshot_pids=() snapshot_labels=()
   local solid_route_target="$client_host"
   [[ "$service_host" != "none" ]] && solid_route_target="$service_host"
   local -a roles=(solid client replayer) hosts=("$pod_host" "$client_host" "$replayer_host") targets=("$solid_route_target" "$pod_host" "$pod_host")

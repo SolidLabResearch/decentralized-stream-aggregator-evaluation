@@ -10,6 +10,7 @@ import { buildActivityIndexQuery } from "../src/experiments/config/query";
 import { loadExperimentConfig } from "../src/experiments/config/config";
 import { resolveClientIndices } from "../src/experiments/clients/shared/runtime";
 import * as crypto from "crypto";
+import { execFileSync } from "child_process";
 
 function writeHeimdallFixture(directory: string, creations: number, clientHashes?: string[], staged = false): void {
     const query = buildActivityIndexQuery(loadExperimentConfig(path.resolve(__dirname, "../src/experiments/config/experiment-config.n079.test.json")).streams);
@@ -69,6 +70,28 @@ async function main(): Promise<void> {
     assert.deepStrictEqual(resolveClientIndices(5, ["node", "launcher"]), [0, 1, 2, 3, 4]);
     assert.deepStrictEqual(resolveClientIndices(5, ["node", "launcher", "--client-ids", "0,2,4"]), [0, 2, 4]);
     assert.throws(() => resolveClientIndices(5, ["node", "launcher", "--client-ids", "1,1"]), /unique/);
+    const runnerSource = fs.readFileSync(path.resolve(__dirname, "../src/experiments/orchestration/run-experiment.sh"), "utf8");
+    const captureStart = runnerSource.indexOf("capture_network_snapshots() {");
+    const captureEnd = runnerSource.indexOf("\n}\nprint_plan()", captureStart);
+    assert.ok(captureStart >= 0 && captureEnd > captureStart, "capture_network_snapshots function is present");
+    const captureFunction = runnerSource.slice(captureStart, captureEnd + 2);
+    const snapshotHarness = execFileSync("bash", ["-c", `
+set -euo pipefail
+root=$(mktemp -d)
+trap 'rm -rf "$root"' EXIT
+iteration_dir=iteration-01
+mkdir -p "$root/$iteration_dir"
+client_host=client
+pod_host=pod
+replayer_host=replayer
+service_host=none
+network_snapshot_command() { printf ':'; }
+experiment_ssh() { printf '%s\\n' "$1" >> "$root/calls"; }
+${captureFunction}
+capture_network_snapshots start iteration-01
+test "$(wc -l < "$root/calls")" -eq 3
+`, "snapshot-harness"], { cwd: path.resolve(__dirname, "..") }).toString();
+    assert.strictEqual(snapshotHarness, "", "capture_network_snapshots executes locally with its snapshot arrays");
     const validationDirectory = fs.mkdtempSync(path.join(os.tmpdir(), "heimdall-reuse-")); writeHeimdallFixture(validationDirectory, 1); assert.deepStrictEqual(validateMultiClientRepetition(validationDirectory, "heimdall", 2), { valid: true, errors: [] }, "one creation and one reuse passes"); fs.rmSync(validationDirectory, { recursive: true, force: true });
     const duplicateDirectory = fs.mkdtempSync(path.join(os.tmpdir(), "heimdall-duplicate-")); writeHeimdallFixture(duplicateDirectory, 2); assert.ok(!validateMultiClientRepetition(duplicateDirectory, "heimdall", 2).valid, "two shared creations fail"); fs.rmSync(duplicateDirectory, { recursive: true, force: true });
     const mismatchDirectory = fs.mkdtempSync(path.join(os.tmpdir(), "heimdall-mismatch-")); writeHeimdallFixture(mismatchDirectory, 1, [undefined as unknown as string, "wrong"]); assert.ok(!validateMultiClientRepetition(mismatchDirectory, "heimdall", 2).valid, "a mismatching client hash fails"); fs.rmSync(mismatchDirectory, { recursive: true, force: true });
