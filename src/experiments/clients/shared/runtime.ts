@@ -2,6 +2,7 @@ import { ChildProcess, fork } from "child_process";
 import * as fs from "fs";
 import * as path from "path";
 import { loadExperimentConfig, queryVariantLabel, replayerDataVariant, resolveStreams, workloadInstance, workloadMode, workloadVariants } from "../../config/config";
+import { buildSaturationQueries } from "../../config/saturation";
 import { sha256 } from "./instrumentation";
 import { monitorHostResources } from "../../monitoring/host-monitor";
 
@@ -57,10 +58,12 @@ export function launchConfiguredClients(approach: Approach, clientModule: string
     fs.mkdirSync(outputDirectory, { recursive: true });
     const instance = workloadInstance(config);
     const variants = workloadVariants(config);
+    const saturationQueries = config.experiment.saturationMode ? buildSaturationQueries(resolveStreams(config, instance), config.experiment.saturationMode, config.experiment.clientCount) : undefined;
     const queryByClient = Object.fromEntries(clientIndices.map((clientIndex) => {
         const streams = resolveStreams(config, instance);
-        const query = require("../../config/query").buildActivityIndexQuery(streams, { workloadMode: workloadMode(config), workloadInstance: instance });
-        return [clientIndex, { queryText: query, queryHash: sha256(query), streams }];
+        const saturation = saturationQueries?.[clientIndex];
+        const query = saturation?.queryText || require("../../config/query").buildActivityIndexQuery(streams, { workloadMode: workloadMode(config), workloadInstance: instance });
+        return [clientIndex, { queryText: query, queryHash: sha256(query), streams, ...(saturation ? { heimdallReuseIdentity: saturation.heimdallReuseIdentity, windowName: saturation.windowName } : {}) }];
     }));
     const metadataPath = path.join(outputDirectory, "metadata.json");
     const existingMetadata = fs.existsSync(metadataPath) ? JSON.parse(fs.readFileSync(metadataPath, "utf8")) as Record<string, any> : {};
@@ -72,6 +75,7 @@ export function launchConfiguredClients(approach: Approach, clientModule: string
         run_id: process.env.EXPERIMENT_RUN_ID || path.basename(outputDirectory),
         approach, frequencyHz: config.experiment.frequencyHz, clientCount: config.experiment.clientCount,
         clientArrivalMode: config.experiment.clientArrivalMode,
+        saturationMode: config.experiment.saturationMode,
         workloadMode: workloadMode(config),
         workloadInstance: instance, queryVariant: variants.queryVariant, queryVariantLabel: queryVariantLabel(config), dataVariant: variants.dataVariant, replayerDataVariant: replayerDataVariant(config),
         arrivalMode: config.experiment.clientArrivalMode === "staged-reuse" ? "staged" : "simultaneous", architectureBehavior,

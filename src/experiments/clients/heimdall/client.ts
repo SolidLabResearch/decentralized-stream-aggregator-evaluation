@@ -3,13 +3,14 @@ import * as path from "path";
 import { WebSocket } from "ws";
 import { loadExperimentConfig, resolveStreams, workloadInstance, workloadMode } from "../../config/config";
 import { buildActivityIndexQuery } from "../../config/query";
+import { buildSaturationQuery } from "../../config/saturation";
 import { monitorCurrentProcess } from "../../monitoring/process-monitor";
 import { clientRuntime } from "../shared/runtime";
 import { RawInstrumentation, sha256 } from "../shared/instrumentation";
 
 const config = loadExperimentConfig();
 const { clientIndex, outputDirectory, runId } = clientRuntime();
-const query = buildActivityIndexQuery(resolveStreams(config), { workloadMode: workloadMode(config), workloadInstance: workloadInstance(config) }); const queryId = sha256(query);
+const query = config.experiment.saturationMode ? buildSaturationQuery(resolveStreams(config), config.experiment.saturationMode, clientIndex).queryText : buildActivityIndexQuery(resolveStreams(config), { workloadMode: workloadMode(config), workloadInstance: workloadInstance(config) }); const queryId = sha256(query);
 const raw = new RawInstrumentation(outputDirectory, { runId, approach: "heimdall", clientId: String(clientIndex), queryId });
 const monitor = monitorCurrentProcess(path.join(outputDirectory, `client-${clientIndex}-resource.csv`), config.experiment.resourceSamplingIntervalMs);
 const results = fs.createWriteStream(path.join(outputDirectory, `client-${clientIndex}-results.csv`), { flags: "w" });

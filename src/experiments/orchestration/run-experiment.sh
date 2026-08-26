@@ -11,7 +11,7 @@ config_json="$(npx --prefix "$root" ts-node -e "process.stdout.write(JSON.string
 read_config() { node -e "const c=JSON.parse(process.argv[1]); console.log($1)" "$config_json"; }
 source "$root/src/experiments/orchestration/ssh-helper.sh"
 
-frequency="$(read_config 'c.experiment.frequencyHz')"; iterations="$(read_config 'c.experiment.iterations')"; duration="$(read_config 'c.experiment.durationSeconds')"; client_count="$(read_config 'c.experiment.clientCount')"; client_arrival_mode="$(read_config 'c.experiment.clientArrivalMode')"
+frequency="$(read_config 'c.experiment.frequencyHz')"; iterations="$(read_config 'c.experiment.iterations')"; duration="$(read_config 'c.experiment.durationSeconds')"; client_count="$(read_config 'c.experiment.clientCount')"; client_arrival_mode="$(read_config 'c.experiment.clientArrivalMode')"; saturation_mode="$(read_config 'c.experiment.saturationMode || ""')"
 late_client_ids=""; if (( client_count > 1 )); then for late_id in $(seq 1 "$((client_count - 1))"); do [[ -n "$late_client_ids" ]] && late_client_ids+=","; late_client_ids+="$late_id"; done; fi
 replayer_host="$(read_config 'c.hosts.replayer')"; pod_host="$(read_config 'c.hosts.solidPod')"; client_host="$(read_config 'c.hosts.client')"; solid_pod_url="$(read_config 'c.urls.solidPod')"
 SSH_USER="${EXPERIMENT_SSH_USER:-$(read_config 'c.ssh.user')}"; SSH_BASTION="${EXPERIMENT_SSH_BASTION:-$(read_config 'c.ssh.bastion === null ? "" : c.ssh.bastion')}"
@@ -186,6 +186,11 @@ heimdall_staged_reuse_ready_command() {
   printf 'test -f %s && awk -F, '\''BEGIN { expected_reuse = %s - 1 } NR == 1 { for (i = 1; i <= NF; i++) operation_column = ($i == "operation" ? i : operation_column) } NR > 1 && operation_column { counts[$operation_column]++ } END { exit !(counts["shared_query_instance_created"] == 1 && counts["shared_query_instance_reused"] == expected_reuse && counts["query_registration"] == %s && counts["stream_subscription"] == 3) }'\'' %s' \
     "$(remote_path_expression "$initialization_csv")" "$expected_clients" "$expected_clients" "$(remote_path_expression "$initialization_csv")"
 }
+heimdall_saturation_ready_command() {
+  local file="$1" expected_unique="$2" expected_reused="$3" expected_subscriptions="$4"
+  printf 'test -f %s && awk -F, '\''NR == 1 { for (i = 1; i <= NF; i++) { if ($i == "operation") op=i; if ($i == "client_id") client=i } next } op { count[$op]++; if ($op == "shared_query_instance_created") created_by_client[$client]=1; if ($op == "shared_query_instance_reused") reused_by_client[$client]=1 } END { clients=0; for (id in created_by_client) clients++; for (id in reused_by_client) if (!(id in created_by_client)) clients++; exit !(count["query_registration"] == %s && count["shared_query_instance_created"] == %s && count["shared_query_instance_reused"] == %s && count["stream_subscription"] == %s && clients == %s) }'\'' %s' \
+    "$(remote_path_expression "$file")" "$client_count" "$expected_unique" "$expected_reused" "$expected_subscriptions" "$client_count" "$(remote_path_expression "$file")"
+}
 notification_aggregator_staged_reuse_ready_command() {
   local service_log="$1"
   printf 'test -f %s && awk '\''BEGIN { marker = "Subscribed to the inbox container location:" } index($0, marker) { value = substr($0, index($0, marker) + length(marker)); if (!(value in seen)) { seen[value] = 1; unique++ } total++ } END { exit !(total == 3 && unique == 3) }'\'' %s' \
@@ -201,7 +206,7 @@ staged_no_service_result_command() {
     "$(remote_path_expression "$processing_csv")" "$(remote_path_expression "$processing_csv")"
 }
 print_plan() {
-  echo "approach=$approach frequencyHz=$frequency clientCount=$client_count clientArrivalMode=$client_arrival_mode iterations=$iterations durationSeconds=$duration"
+  echo "approach=$approach frequencyHz=$frequency clientCount=$client_count clientArrivalMode=$client_arrival_mode saturationMode=${saturation_mode:-none} iterations=$iterations durationSeconds=$duration"
   echo "ssh=user:$SSH_USER bastion:${SSH_BASTION:-none} identity:${SSH_IDENTITY_FILE:+configured} timeout:${SSH_CONNECT_TIMEOUT_SECONDS}s"
   echo "machines: replayer=$replayer_host solidPod=$pod_host client=$client_host service=$service_host"
   echo "remote-paths: evaluation=$evaluation_path heimdall=$heimdall_path notificationAggregator=$notification_aggregator_path rspJs=$rsp_js_path replayer=$replayer_path"
@@ -363,7 +368,15 @@ for iteration in $(seq 1 "$iterations"); do
     experiment_ssh "$replayer_host" "$replayer_launch_command" >"$root/$iteration_dir/replayer.log" 2>&1 & replayer_pid=$!
   else
     experiment_ssh "$client_host" "$(client_launch_command "$iteration_dir" "$run_id-$(printf '%02d' "$iteration")")" >"$root/$iteration_dir/client-launcher.log" 2>&1 & client_pid=$!
-    wait_for_command_on_host "all client confirmed-ready markers" "$client_host" "$(all_client_ready_markers_command "$iteration_dir")" "${CLIENT_READY_TIMEOUT_SECONDS:-60}" "${EXPERIMENT_FIRST_WINDOW_POLL_INTERVAL_SECONDS:-1}" || { echo "Not all $client_count clients became ready; replayer will not be started." >&2; exit 1; }
+    readiness_started=$SECONDS
+    ready_timeout="${CLIENT_READY_TIMEOUT_SECONDS:-60}"; [[ -n "$saturation_mode" ]] && ready_timeout="${SATURATION_CLIENT_READY_TIMEOUT_SECONDS:-$ready_timeout}"
+    wait_for_command_on_host "all client confirmed-ready markers" "$client_host" "$(all_client_ready_markers_command "$iteration_dir")" "$ready_timeout" "${EXPERIMENT_FIRST_WINDOW_POLL_INTERVAL_SECONDS:-1}" || { echo "Not all $client_count clients became ready; replayer will not be started." >&2; exit 1; }
+    if [[ "$approach" == "heimdall" && -n "$saturation_mode" ]]; then
+      expected_unique=1; expected_reused=$((client_count - 1)); expected_subscriptions=3
+      if [[ "$saturation_mode" == "distinct-query" ]]; then expected_unique=$client_count; expected_reused=0; expected_subscriptions=$((client_count * 3)); fi
+      wait_for_command "Heimdall saturation reuse invariant" "$(heimdall_saturation_ready_command "$service_iteration_dir/initialization.csv" "$expected_unique" "$expected_reused" "$expected_subscriptions")" "${SATURATION_REUSE_READY_TIMEOUT_SECONDS:-${HEIMDALL_QUERY_READY_TIMEOUT_SECONDS:-30}}" "${EXPERIMENT_FIRST_WINDOW_POLL_INTERVAL_SECONDS:-1}" || { echo "Heimdall saturation invariant was not established before replay." >&2; exit 1; }
+      experiment_ssh "$client_host" "node -e 'const fs=require(\"fs\"),p=process.argv[1],m=JSON.parse(fs.readFileSync(p));m.readinessDurationMs=Number(process.argv[2]);fs.writeFileSync(p,JSON.stringify(m,null,2)+\"\\n\")' $(remote_path_expression "$evaluation_path/$iteration_dir/metadata.json") $(( (SECONDS - readiness_started) * 1000 ))"
+    fi
     capture_network_snapshots start "iteration-$(printf '%02d' "$iteration")"
     replay_deadline=$((SECONDS + duration))
     experiment_ssh "$replayer_host" "$replayer_launch_command" >"$root/$iteration_dir/replayer.log" 2>&1 & replayer_pid=$!

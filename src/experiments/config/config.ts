@@ -2,11 +2,12 @@ import * as fs from "fs";
 import * as path from "path";
 
 export type WorkloadMode = "same-query-same-data" | "different-query-same-data" | "different-query-different-data";
+export type SaturationMode = "same-query" | "distinct-query";
 export type WorkloadInstance = 0 | 1 | 2;
 export interface StreamTriplet { x: string; y: string; z: string; }
 
 export interface ExperimentConfig {
-    experiment: { frequencyHz: number; clientCount: number; iterations: number; durationSeconds: number; resourceSamplingIntervalMs: number; clientArrivalMode: "simultaneous" | "staged-reuse"; workloadMode?: WorkloadMode; workloadInstance?: WorkloadInstance; replayerDataVariant?: "A" | "B" | "C" };
+    experiment: { frequencyHz: number; clientCount: number; iterations: number; durationSeconds: number; resourceSamplingIntervalMs: number; clientArrivalMode: "simultaneous" | "staged-reuse"; workloadMode?: WorkloadMode; workloadInstance?: WorkloadInstance; replayerDataVariant?: "A" | "B" | "C"; saturationMode?: SaturationMode; saturationMaxClientCount?: number };
     ssh: { user: string; bastion: string | null; identityFile: string | null; connectTimeoutSeconds: number };
     hosts: { replayer: string; solidPod: string; client: string; heimdall: string; notificationAggregator: string };
     remotePaths: { evaluation: string; heimdall: string; notificationAggregator: string; rspJs: string; replayer: string };
@@ -46,8 +47,12 @@ export function validateExperimentConfig(config: ExperimentConfig): ExperimentCo
     if (config.experiment.replayerDataVariant !== undefined && !["A", "B", "C"].includes(config.experiment.replayerDataVariant)) {
         throw new Error("Invalid experiment configuration: replayerDataVariant must be A, B, or C.");
     }
-    if (!Number.isInteger(config.experiment.clientCount) || config.experiment.clientCount < 1 || config.experiment.clientCount > 30) {
-        throw new Error("Invalid experiment configuration: clientCount must be an integer from 1 through 30.");
+    if (config.experiment.saturationMode !== undefined && !["same-query", "distinct-query"].includes(config.experiment.saturationMode)) throw new Error('Invalid experiment configuration: saturationMode must be "same-query" or "distinct-query".');
+    if (config.experiment.saturationMode !== undefined && config.experiment.clientArrivalMode !== "simultaneous") throw new Error("Invalid experiment configuration: saturation experiments require simultaneous clients.");
+    const maximumClients = config.experiment.saturationMode === undefined ? 30 : (config.experiment.saturationMaxClientCount ?? 1024);
+    if (config.experiment.saturationMode !== undefined && (!Number.isInteger(maximumClients) || maximumClients < 128)) throw new Error("Invalid experiment configuration: saturationMaxClientCount must be an integer of at least 128.");
+    if (!Number.isInteger(config.experiment.clientCount) || config.experiment.clientCount < 1 || config.experiment.clientCount > maximumClients) {
+        throw new Error(`Invalid experiment configuration: clientCount must be an integer from 1 through ${maximumClients}.`);
     }
     positiveInteger(config.experiment.iterations, "iterations");
     positiveInteger(config.experiment.durationSeconds, "durationSeconds");
