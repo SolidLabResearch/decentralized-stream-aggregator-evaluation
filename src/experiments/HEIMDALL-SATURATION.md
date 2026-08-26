@@ -2,9 +2,13 @@
 
 This is a separate Heimdall-only experiment for the Sensors-paper scalability concern. It reports saturation characteristics of the evaluated deployment, not a universal Heimdall capacity.
 
-`same-query` sends byte-identical Qsat0 to every concurrent client. `distinct-query` retains the same three streams, 60 s range, 20 s step, BGP, SELECT expression, and result shape, but gives client *i* a deterministic first window name `:satwNNNN`. Both the `FROM NAMED WINDOW` declaration and its matching `WINDOW` reference change together, so the graph binding is unchanged.
+`same-query` is the maximum-reuse condition: every concurrent client sends byte-identical Qsat0, and Heimdall is expected to maintain one reusable execution.
 
-The local registry source proves why this is required. `hash_string_md5` removes whitespace; `QueryRegistry.checkUniqueQuery` then calls `is_equivalent`. The installed equivalence implementation ignores FILTER patterns, so numeric FILTER literals would accidentally reuse. It explicitly compares the first window name before BGP isomorphism: `:satw0000` through `:satw0127` are therefore 128 distinct service reuse identities without changing data predicates, range/step, or result projection. This is an identity-controlled, not a data-filter, family.
+`distinct-query` is the controlled non-reusable-query-identity condition, not N different semantic analytical tasks. It retains the same streams and data, 60 s range, 20 s step, three windows, BGP, SELECT expression, result shape, expected cardinality, and computational workload structure. Client *i* differs only in a deterministic first window identifier `:satwNNNN`; both the `FROM NAMED WINDOW` declaration and its matching `WINDOW` reference change together, so the graph binding is unchanged. Heimdall consequently maintains N independent executions according to its actual reuse/equivalence implementation.
+
+The local registry source proves why this is required. `hash_string_md5` removes whitespace; `QueryRegistry.checkUniqueQuery` then calls `is_equivalent`. The installed equivalence implementation ignores FILTER patterns, so numeric FILTER literals would accidentally reuse. It explicitly compares the first window name before BGP isomorphism: `:satw0000` through `:satw0127` are therefore 128 controlled, non-reusable service identities. This proves non-reuse in Heimdall; it does **not** prove 128 semantically different computations, and window renaming does not increase query complexity.
+
+This framing isolates the benefit and cost of shared query execution. Changing BGPs, FILTER selectivity, windows, streams, or result cardinality would confound reuse with query complexity or workload selectivity. The separate heterogeneous-workload experiment is the place for genuinely different BGP/query structures.
 
 The dataset audit reads the local 4 Hz DAHCC source and requires each observation to have numeric `hasValue` plus the three canonical descriptor predicates. Since saturation queries do not add predicates or filters, their eligible observation population and cardinality are unchanged; the audit records the observed numeric range only as provenance.
 

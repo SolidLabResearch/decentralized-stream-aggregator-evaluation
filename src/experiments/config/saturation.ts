@@ -3,7 +3,11 @@ import * as fs from "fs";
 import { SaturationMode, StreamTriplet } from "./config";
 import { buildActivityIndexQuery } from "./query";
 
-export type SaturationQuery = { clientIndex: number; queryText: string; queryHash: string; heimdallReuseIdentity: string; windowName: string };
+export type SaturationQuery = {
+    clientIndex: number; queryText: string; queryHash: string; heimdallReuseIdentity: string; windowName: string;
+    reuseClassification: "maximum-reuse" | "controlled-non-reusable-identity";
+    computationalEquivalence: "same-streams-data-windows-bgp-projection-and-expected-cardinality";
+};
 
 // This is the exact identity derivation in solid-stream-aggregator/src/utils/Util.ts.
 export function heimdallReuseIdentity(query: string): string { return crypto.createHash("md5").update(query.replace(/\s/g, "")).digest("hex"); }
@@ -17,8 +21,11 @@ export function buildSaturationQuery(streams: StreamTriplet, mode: SaturationMod
     // FILTER literals are deliberately not used: the installed Heimdall equivalence checker ignores FILTER nodes.
     // It does, however, compare the first window name before BGP isomorphism. Renaming the registered first
     // window and its matching GRAPH reference leaves all input streams, ranges, steps, BGP triples and SELECT unchanged.
+    // This makes a controlled non-reusable identity, not a different semantic analytical task or a more complex query.
     const queryText = canonical.replace(/:w1/g, windowName);
-    return { clientIndex, queryText, queryHash: crypto.createHash("sha256").update(queryText).digest("hex"), heimdallReuseIdentity: heimdallReuseIdentity(queryText), windowName };
+    return { clientIndex, queryText, queryHash: crypto.createHash("sha256").update(queryText).digest("hex"), heimdallReuseIdentity: heimdallReuseIdentity(queryText), windowName,
+        reuseClassification: mode === "same-query" ? "maximum-reuse" : "controlled-non-reusable-identity",
+        computationalEquivalence: "same-streams-data-windows-bgp-projection-and-expected-cardinality" };
 }
 
 export function buildSaturationQueries(streams: StreamTriplet, mode: SaturationMode, clientCount: number): SaturationQuery[] {

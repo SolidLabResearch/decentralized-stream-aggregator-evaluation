@@ -63,19 +63,20 @@ export function launchConfiguredClients(approach: Approach, clientModule: string
         const streams = resolveStreams(config, instance);
         const saturation = saturationQueries?.[clientIndex];
         const query = saturation?.queryText || require("../../config/query").buildActivityIndexQuery(streams, { workloadMode: workloadMode(config), workloadInstance: instance });
-        return [clientIndex, { queryText: query, queryHash: sha256(query), streams, ...(saturation ? { heimdallReuseIdentity: saturation.heimdallReuseIdentity, windowName: saturation.windowName } : {}) }];
+        return [clientIndex, { queryText: query, queryHash: sha256(query), streams, ...(saturation ? { heimdallReuseIdentity: saturation.heimdallReuseIdentity, windowName: saturation.windowName, reuseClassification: saturation.reuseClassification, computationalEquivalence: saturation.computationalEquivalence } : {}) }];
     }));
     const metadataPath = path.join(outputDirectory, "metadata.json");
     const existingMetadata = fs.existsSync(metadataPath) ? JSON.parse(fs.readFileSync(metadataPath, "utf8")) as Record<string, any> : {};
     const previousLaunches = Array.isArray(existingMetadata.launches) ? existingMetadata.launches : [];
     const previousClientIds = Array.isArray(existingMetadata.launchedClientIds) ? existingMetadata.launchedClientIds : [];
-    const architectureBehavior = config.experiment.workloadMode !== undefined && config.experiment.clientCount === 1 ? "single_client_workload_composition" : approach === "heimdall" ? "shared_query_reuse" : approach === "notification-aggregator" ? "shared_upstream_reuse" : "independent_processing";
+    const architectureBehavior = config.experiment.saturationMode === "same-query" ? "maximum_shared_query_reuse" : config.experiment.saturationMode === "distinct-query" ? "controlled_non_reusable_query_identities" : config.experiment.workloadMode !== undefined && config.experiment.clientCount === 1 ? "single_client_workload_composition" : approach === "heimdall" ? "shared_query_reuse" : approach === "notification-aggregator" ? "shared_upstream_reuse" : "independent_processing";
     fs.writeFileSync(metadataPath, JSON.stringify({
         ...existingMetadata,
         run_id: process.env.EXPERIMENT_RUN_ID || path.basename(outputDirectory),
         approach, frequencyHz: config.experiment.frequencyHz, clientCount: config.experiment.clientCount,
         clientArrivalMode: config.experiment.clientArrivalMode,
         saturationMode: config.experiment.saturationMode,
+        saturationModeDescription: config.experiment.saturationMode === "same-query" ? "maximum reuse: byte-identical query registrations" : config.experiment.saturationMode === "distinct-query" ? "controlled non-reusable query identities: computationally equivalent queries distinguished only by paired first-window identifiers" : undefined,
         workloadMode: workloadMode(config),
         workloadInstance: instance, queryVariant: variants.queryVariant, queryVariantLabel: queryVariantLabel(config), dataVariant: variants.dataVariant, replayerDataVariant: replayerDataVariant(config),
         arrivalMode: config.experiment.clientArrivalMode === "staged-reuse" ? "staged" : "simultaneous", architectureBehavior,
