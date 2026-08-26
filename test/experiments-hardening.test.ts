@@ -84,6 +84,14 @@ async function main(): Promise<void> {
     const networkInterfaceEnd = runnerSource.indexOf("\n}\nnetwork_snapshot_command()", networkInterfaceStart);
     assert.ok(networkInterfaceStart >= 0 && networkInterfaceEnd > networkInterfaceStart, "network_interface_command function is present");
     const networkInterfaceFunction = runnerSource.slice(networkInterfaceStart, networkInterfaceEnd + 2);
+    const replayMeasurementStart = runnerSource.indexOf("wait_for_replay_measurement_window() {");
+    const replayMeasurementEnd = runnerSource.indexOf("\n}\nstop_replayer_process_group()", replayMeasurementStart);
+    assert.ok(replayMeasurementStart >= 0 && replayMeasurementEnd > replayMeasurementStart, "bounded replay measurement helper is present");
+    const replayMeasurementFunction = runnerSource.slice(replayMeasurementStart, replayMeasurementEnd + 2);
+    const stopReplayerStart = runnerSource.indexOf("stop_replayer_process_group() {");
+    const stopReplayerEnd = runnerSource.indexOf("\n}\n\nif [[ \"$mode\"", stopReplayerStart);
+    assert.ok(stopReplayerStart >= 0 && stopReplayerEnd > stopReplayerStart, "replayer process-group stop helper is present");
+    const stopReplayerFunction = runnerSource.slice(stopReplayerStart, stopReplayerEnd + 2);
     const snapshotHarness = execFileSync("bash", ["-c", `
 set -euo pipefail
 root=$(mktemp -d)
@@ -150,6 +158,53 @@ capture_network_snapshots start iteration-01
 test "$(wc -l < "$root/calls")" -eq 3
 `, "snapshot-harness"], { cwd: path.resolve(__dirname, "..") }).toString();
     assert.strictEqual(snapshotHarness, "", "capture_network_snapshots executes locally with its snapshot arrays");
+    const replayWindowHarness = execFileSync("bash", ["-c", `
+set -euo pipefail
+root=$(mktemp -d)
+trap 'rm -rf "$root"' EXIT
+duration=3
+approach=heimdall
+EXPERIMENT_STOP_AFTER_FIRST_WINDOW=true
+EXPERIMENT_FIRST_WINDOW_POLL_INTERVAL_SECONDS=1
+service_host=service
+client_host=client
+service_iteration_dir=service-iteration
+replayer_pid=999
+replayer_host=replayer
+replayer_pid_file="$root/replayer.pid"
+printf 999 > "$replayer_pid_file"
+heimdall_first_result_ready_command() { printf service-first-result; }
+all_client_first_result_markers_ready_command() { printf client-first-result; }
+poll_count=0
+result_after=1
+experiment_ssh() {
+  case "$2" in
+    service-first-result|client-first-result) poll_count=$((poll_count + 1)); test "$poll_count" -ge "$result_after" ;;
+    *) printf '%s\\n' "$2" >> "$root/stop-command" ;;
+  esac
+}
+kill() { test "$1" = -0 && return 0; return 0; }
+sleep() { SECONDS=$((SECONDS + $1)); }
+${replayMeasurementFunction}
+${stopReplayerFunction}
+SECONDS=0
+wait_for_replay_measurement_window 3 iteration-01
+test "$SECONDS" -eq 3
+test "$poll_count" -eq 2
+SECONDS=0
+poll_count=0
+result_after=99
+set +e
+wait_for_replay_measurement_window 3 iteration-01 >/dev/null 2>&1
+missing_status=$?
+set -e
+test "$missing_status" -ne 0
+test "$SECONDS" -eq 3
+SECONDS=3
+stop_replayer_process_group
+grep -F 'kill -TERM -- "-$pid"' "$root/stop-command" >/dev/null
+`, "replay-window-harness"], { cwd: path.resolve(__dirname, "..") }).toString();
+    assert.strictEqual(replayWindowHarness, "", "bounded replay window reaches its deadline, accepts early results, and stops the replayer group");
     const remoteHelper = (name: string, nextName: string): string => {
         const start = runnerSource.indexOf(`${name}() {`);
         const end = runnerSource.indexOf(`\n}\n${nextName}()`, start);
@@ -229,10 +284,14 @@ if bash -c "$no_service_result_command"; then echo "processing.csv with r2r_firs
     assert.doesNotMatch(clientLaunchFunction, /\\\$/);
     assert.doesNotMatch(serviceLaunchFunction, /\\\$/);
     const simultaneousStart = runnerSource.indexOf("\n  else\n", stagedStart);
-    const simultaneousEnd = runnerSource.indexOf('\n  fi\n  wait "$replayer_pid"', simultaneousStart);
+    const simultaneousEnd = runnerSource.indexOf('\n  fi\n  workload_failed=false', simultaneousStart);
     const simultaneousBranch = runnerSource.slice(simultaneousStart, simultaneousEnd);
     assert.ok(sourceOrder(simultaneousBranch, "all client confirmed-ready markers") < sourceOrder(simultaneousBranch, 'capture_network_snapshots start'));
     assert.ok(sourceOrder(simultaneousBranch, 'capture_network_snapshots start') < sourceOrder(simultaneousBranch, 'experiment_ssh "$replayer_host" "$replayer_launch_command"'));
+    const replayWindowCall = runnerSource.indexOf('wait_for_replay_measurement_window "$replay_deadline"');
+    const endSnapshot = runnerSource.indexOf('capture_network_snapshots end', replayWindowCall);
+    const replayerStop = runnerSource.indexOf('stop_replayer_process_group', endSnapshot);
+    assert.ok(replayWindowCall > stagedStart && endSnapshot > replayWindowCall && replayerStop > endSnapshot, "both modes use one bounded replay interval before END snapshots and replayer termination");
     assert.match(runnerSource, /without_aggregator_first_result_ready_command/);
     const validationDirectory = fs.mkdtempSync(path.join(os.tmpdir(), "heimdall-reuse-")); writeHeimdallFixture(validationDirectory, 1); assert.deepStrictEqual(validateMultiClientRepetition(validationDirectory, "heimdall", 2), { valid: true, errors: [] }, "one creation and one reuse passes"); fs.rmSync(validationDirectory, { recursive: true, force: true });
     const duplicateDirectory = fs.mkdtempSync(path.join(os.tmpdir(), "heimdall-duplicate-")); writeHeimdallFixture(duplicateDirectory, 2); assert.ok(!validateMultiClientRepetition(duplicateDirectory, "heimdall", 2).valid, "two shared creations fail"); fs.rmSync(duplicateDirectory, { recursive: true, force: true });

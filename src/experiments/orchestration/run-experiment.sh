@@ -231,6 +231,28 @@ wait_for_command_on_host() {
   done
   echo "$label did not become ready within ${timeout}s." >&2; return 1
 }
+wait_for_replay_measurement_window() {
+  local deadline="$1" iteration_dir="$2" interval="${EXPERIMENT_FIRST_WINDOW_POLL_INTERVAL_SECONDS:-1}"
+  local first_results_ready=false replayer_exited_early=false service_result_ready=true client_results_ready=false remaining
+  while (( SECONDS < deadline )); do
+    if [[ "$first_results_ready" != true ]]; then
+      service_result_ready=true
+      if [[ "$approach" == "heimdall" && "${EXPERIMENT_STOP_AFTER_FIRST_WINDOW:-false}" == "true" ]]; then
+        experiment_ssh "$service_host" "$(heimdall_first_result_ready_command "$service_iteration_dir/window-processing.csv")" && service_result_ready=true || service_result_ready=false
+      fi
+      experiment_ssh "$client_host" "$(all_client_first_result_markers_ready_command "$iteration_dir")" && client_results_ready=true || client_results_ready=false
+      [[ "$service_result_ready" == true && "$client_results_ready" == true ]] && first_results_ready=true
+    fi
+    kill -0 "$replayer_pid" 2>/dev/null || replayer_exited_early=true
+    remaining=$((deadline - SECONDS)); (( remaining > 0 )) || break
+    sleep "$(( remaining < interval ? remaining : interval ))"
+  done
+  [[ "$first_results_ready" == true ]] || { echo "Not all clients produced a first result within ${duration}s after replay started." >&2; return 1; }
+  [[ "$replayer_exited_early" != true ]] || { echo "Replayer exited before the ${duration}s measurement deadline." >&2; return 1; }
+}
+stop_replayer_process_group() {
+  experiment_ssh "$replayer_host" "if test -f \"$replayer_pid_file\"; then pid=\$(cat \"$replayer_pid_file\" 2>/dev/null || true); if test -n \"\$pid\" && kill -0 -- \"-\$pid\" 2>/dev/null; then kill -TERM -- \"-\$pid\" 2>/dev/null || kill -TERM \"\$pid\" 2>/dev/null || true; for attempt in 1 2 3 4 5; do kill -0 -- \"-\$pid\" 2>/dev/null || break; sleep 1; done; if kill -0 -- \"-\$pid\" 2>/dev/null; then kill -KILL -- \"-\$pid\" 2>/dev/null || kill -KILL \"\$pid\" 2>/dev/null || true; fi; fi; rm -f \"$replayer_pid_file\"; fi" || true
+}
 
 if [[ "$mode" == "--dry-run" ]]; then print_plan; exit 0; fi
 if [[ "$mode" == "--preflight" ]]; then
@@ -267,7 +289,7 @@ cleanup() {
   if [[ "$approach" == "heimdall" ]]; then
     experiment_ssh "$service_host" "if test -f \"$heimdall_pid_file\"; then pid=\$(cat \"$heimdall_pid_file\" 2>/dev/null || true); if test -n \"\$pid\" && kill -0 \"\$pid\" 2>/dev/null; then kill -TERM -- \"-\$pid\" 2>/dev/null || kill -TERM \"\$pid\" 2>/dev/null || true; for attempt in 1 2 3 4 5; do status=\$(ps -o stat= -p \"\$pid\" 2>/dev/null | tr -d ' ' || true); if test -z \"\$status\" || [[ \"\$status\" == Z* ]]; then break; fi; sleep 1; done; status=\$(ps -o stat= -p \"\$pid\" 2>/dev/null | tr -d ' ' || true); if test -n \"\$status\" && [[ \"\$status\" != Z* ]]; then kill -KILL -- \"-\$pid\" 2>/dev/null || kill -KILL \"\$pid\" 2>/dev/null || true; fi; fi; rm -f \"$heimdall_pid_file\"; status=\$(ps -o stat= -p \"\$pid\" 2>/dev/null | tr -d ' ' || true); if test -n \"\$status\" && [[ \"\$status\" != Z* ]]; then echo \"Heimdall run PID \$pid is still running after cleanup.\" >&2; exit 1; fi; fi"
   fi
-  experiment_ssh "$replayer_host" "if test -f \"$replayer_pid_file\"; then pid=\$(cat \"$replayer_pid_file\" 2>/dev/null || true); if test -n \"\$pid\" && kill -0 \"\$pid\" 2>/dev/null; then kill -TERM -- \"-\$pid\" 2>/dev/null || kill -TERM \"\$pid\" 2>/dev/null || true; for attempt in 1 2 3 4 5; do status=\$(ps -o stat= -p \"\$pid\" 2>/dev/null | tr -d ' ' || true); if test -z \"\$status\" || [[ \"\$status\" == Z* ]]; then break; fi; sleep 1; done; status=\$(ps -o stat= -p \"\$pid\" 2>/dev/null | tr -d ' ' || true); if test -n \"\$status\" && [[ \"\$status\" != Z* ]]; then kill -KILL -- \"-\$pid\" 2>/dev/null || kill -KILL \"\$pid\" 2>/dev/null || true; fi; fi; rm -f \"$replayer_pid_file\"; status=\$(ps -o stat= -p \"\$pid\" 2>/dev/null | tr -d ' ' || true); if test -n \"\$status\" && [[ \"\$status\" != Z* ]]; then echo \"Replayer run PID \$pid is still running after cleanup.\" >&2; exit 1; fi; fi"
+  stop_replayer_process_group
 }
 trap cleanup EXIT INT TERM
 for iteration in $(seq 1 "$iterations"); do
@@ -314,26 +336,23 @@ for iteration in $(seq 1 "$iterations"); do
     experiment_ssh "$client_host" "$(staged_phase_marker_command "$iteration_dir" staged-reuse-validation-complete.json reuse-validation-complete)"
     experiment_ssh "$client_host" "$(staged_phase_marker_command "$iteration_dir" staged-all-clients-ready.json all-clients-ready)"
     capture_network_snapshots start "iteration-$(printf '%02d' "$iteration")"
+    replay_deadline=$((SECONDS + duration))
     experiment_ssh "$client_host" "$(staged_phase_marker_command "$iteration_dir" staged-replay-start.json replay-start)"
     experiment_ssh "$replayer_host" "$replayer_launch_command" >"$root/$iteration_dir/replayer.log" 2>&1 & replayer_pid=$!
-    if [[ "$approach" == "heimdall" && "${EXPERIMENT_STOP_AFTER_FIRST_WINDOW:-false}" == "true" ]]; then
-      wait_for_command "first Heimdall R2R result" "$(heimdall_first_result_ready_command "$service_iteration_dir/window-processing.csv")" "$duration" "${EXPERIMENT_FIRST_WINDOW_POLL_INTERVAL_SECONDS:-1}" || { echo "No r2r_first_result appeared within ${duration}s after replay started." >&2; exit 1; }
-    fi
-    wait_for_command_on_host "all client first-result markers" "$client_host" "$(all_client_first_result_markers_ready_command "$iteration_dir")" "$duration" "${EXPERIMENT_FIRST_WINDOW_POLL_INTERVAL_SECONDS:-1}" || { echo "Not all staged clients produced a first result after replay started." >&2; exit 1; }
   else
     experiment_ssh "$client_host" "$(client_launch_command "$iteration_dir" "$run_id-$(printf '%02d' "$iteration")")" >"$root/$iteration_dir/client-launcher.log" 2>&1 & client_pid=$!
     wait_for_command_on_host "all client confirmed-ready markers" "$client_host" "$(all_client_ready_markers_command "$iteration_dir")" "${CLIENT_READY_TIMEOUT_SECONDS:-60}" "${EXPERIMENT_FIRST_WINDOW_POLL_INTERVAL_SECONDS:-1}" || { echo "Not all $client_count clients became ready; replayer will not be started." >&2; exit 1; }
     capture_network_snapshots start "iteration-$(printf '%02d' "$iteration")"
+    replay_deadline=$((SECONDS + duration))
     experiment_ssh "$replayer_host" "$replayer_launch_command" >"$root/$iteration_dir/replayer.log" 2>&1 & replayer_pid=$!
-    if [[ "$approach" == "heimdall" && "${EXPERIMENT_STOP_AFTER_FIRST_WINDOW:-false}" == "true" ]]; then
-      wait_for_command "first Heimdall R2R result" "$(heimdall_first_result_ready_command "$service_iteration_dir/window-processing.csv")" "$duration" "${EXPERIMENT_FIRST_WINDOW_POLL_INTERVAL_SECONDS:-1}" || { echo "No r2r_first_result appeared within ${duration}s after replay started." >&2; exit 1; }
-    fi
-    wait_for_command_on_host "all client first-result markers" "$client_host" "$(all_client_first_result_markers_ready_command "$iteration_dir")" "$duration" "${EXPERIMENT_FIRST_WINDOW_POLL_INTERVAL_SECONDS:-1}" || { echo "Not all $client_count clients produced a first result within ${duration}s after replay started." >&2; exit 1; }
   fi
-  wait "$replayer_pid"
+  workload_failed=false
+  wait_for_replay_measurement_window "$replay_deadline" "$iteration_dir" || workload_failed=true
   capture_network_snapshots end "iteration-$(printf '%02d' "$iteration")"
+  stop_replayer_process_group
+  kill "$replayer_pid" 2>/dev/null || true; wait "$replayer_pid" 2>/dev/null || true
   cleanup
-  pids=("$client_pid" "$client_phase_b_ssh_pid" "$replayer_pid"); if [[ -n "$service_pid" ]]; then pids+=("$service_pid"); fi; if [[ -n "$service_monitor_pid" ]]; then pids+=("$service_monitor_pid"); fi
+  pids=("$client_pid" "$client_phase_b_ssh_pid"); if [[ -n "$service_pid" ]]; then pids+=("$service_pid"); fi; if [[ -n "$service_monitor_pid" ]]; then pids+=("$service_monitor_pid"); fi
   kill "${pids[@]}" 2>/dev/null || true; wait "${pids[@]}" 2>/dev/null || true
   experiment_scp_from "$client_host" "$evaluation_path/$iteration_dir" "$root/$output_root/"
   mkdir -p "$root/$iteration_dir/network"
@@ -348,4 +367,5 @@ for iteration in $(seq 1 "$iterations"); do
   fi
   npx --prefix "$root" ts-node src/experiments/network/collect-network.ts --output "$root/$iteration_dir/network.csv" --approach "$approach" --run-id "$run_id" --client-count "$client_count" --iteration "$iteration" --input-dir "$root/$iteration_dir/network"
   if [[ "$service_host" != "none" ]]; then experiment_scp_from "$service_host" "$service_iteration_dir" "$root/$iteration_dir/service"; if [[ -f "$root/$iteration_dir/service/resource.csv" ]]; then cp "$root/$iteration_dir/service/resource.csv" "$root/$iteration_dir/service-resource.csv"; elif [[ -f "$root/$iteration_dir/service/service-resource.csv" ]]; then cp "$root/$iteration_dir/service/service-resource.csv" "$root/$iteration_dir/service-resource.csv"; fi; fi
+  [[ "$workload_failed" != true ]] || exit 1
 done
