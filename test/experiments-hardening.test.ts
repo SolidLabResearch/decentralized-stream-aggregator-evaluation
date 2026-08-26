@@ -104,6 +104,59 @@ capture_network_snapshots start iteration-01
 test "$(wc -l < "$root/calls")" -eq 3
 `, "snapshot-harness"], { cwd: path.resolve(__dirname, "..") }).toString();
     assert.strictEqual(snapshotHarness, "", "capture_network_snapshots executes locally with its snapshot arrays");
+    const remoteHelper = (name: string, nextName: string): string => {
+        const start = runnerSource.indexOf(`${name}() {`);
+        const end = runnerSource.indexOf(`\n}\n${nextName}()`, start);
+        assert.ok(start >= 0 && end > start, `${name} function is present`);
+        return runnerSource.slice(start, end + 2);
+    };
+    const markerCommandFunctions = [
+        remoteHelper("all_client_ready_markers_command", "late_client_ready_markers_command"),
+        remoteHelper("all_client_first_result_markers_ready_command", "all_client_ready_markers_command"),
+        remoteHelper("late_client_ready_markers_command", "late_client_first_result_markers_ready_command"),
+        remoteHelper("late_client_first_result_markers_ready_command", "staged_phase_marker_command"),
+        remoteHelper("without_aggregator_first_result_ready_command", "all_client_first_result_markers_ready_command"),
+        remoteHelper("staged_no_client_results_command", "staged_no_service_result_command")
+    ].join("\n");
+    const remoteHelperHarness = execFileSync("bash", ["-c", `
+set -euo pipefail
+root=$(mktemp -d)
+trap 'rm -rf "$root"' EXIT
+evaluation_path="$root"
+client_count=2
+shell_quote() { printf "'%s'" "$1"; }
+remote_path_expression() { printf "'%s'" "$1"; }
+${markerCommandFunctions}
+mkdir -p "$root/iteration-01"
+printf x > "$root/iteration-01/client-0-ready.json"
+printf x > "$root/iteration-01/client-1-ready.json"
+ready_command=$(all_client_ready_markers_command iteration-01)
+first_command=$(all_client_first_result_markers_ready_command iteration-01)
+late_ready_command=$(late_client_ready_markers_command iteration-01)
+late_first_command=$(late_client_first_result_markers_ready_command iteration-01)
+no_result_command=$(staged_no_client_results_command iteration-01)
+without_command=$(without_aggregator_first_result_ready_command iteration-01)
+for command in "$ready_command" "$first_command" "$late_ready_command" "$late_first_command" "$no_result_command" "$without_command"; do
+  case "$command" in *'\\$iteration_dir'*|*'\\$marker'*|*'\\$client_id'*) exit 1 ;; esac
+done
+bash -c "$ready_command" || { echo "ready helper failed: $ready_command" >&2; exit 1; }
+rm "$root/iteration-01/client-1-ready.json"
+if bash -c "$ready_command"; then exit 1; fi
+printf x > "$root/iteration-01/client-1-ready.json"
+if bash -c "$first_command"; then exit 1; fi
+bash -c "$late_ready_command" || { echo "late ready helper failed: $late_ready_command" >&2; exit 1; }
+if bash -c "$late_first_command"; then exit 1; fi
+bash -c "$no_result_command" || { echo "no-result helper failed: $no_result_command" >&2; exit 1; }
+printf x > "$root/iteration-01/client-0-first-result.ready"
+printf x > "$root/iteration-01/client-1-first-result.ready"
+bash -c "$first_command" || { echo "first-result helper failed: $first_command" >&2; exit 1; }
+bash -c "$late_first_command" || { echo "late first-result helper failed: $late_first_command" >&2; exit 1; }
+if bash -c "$no_result_command"; then exit 1; fi
+printf 'operation\\n' > "$root/iteration-01/client-0-operations.csv"
+printf 'r2r_first_result\\n' >> "$root/iteration-01/client-0-operations.csv"
+bash -c "$without_command" || { echo "without-aggregator helper failed: $without_command" >&2; exit 1; }
+`, "remote-helper-harness"], { cwd: path.resolve(__dirname, "..") }).toString();
+    assert.strictEqual(remoteHelperHarness, "", "generated remote marker helpers expand variables and execute locally");
     const stagedStart = runnerSource.indexOf('  if [[ "$client_arrival_mode" == "staged-reuse" ]]', runnerSource.indexOf('client_phase_b_ssh_pid=""'));
     const stagedBranch = runnerSource.slice(stagedStart, runnerSource.indexOf("\n  else\n", stagedStart));
     const sourceOrder = (text: string, token: string): number => { const index = text.indexOf(token); assert.ok(index >= 0, `staged runner contains ${token}`); return index; };
@@ -118,6 +171,10 @@ test "$(wc -l < "$root/calls")" -eq 3
     assert.match(fs.readFileSync(path.resolve(__dirname, "../src/experiments/clients/heimdall/client.ts"), "utf8"), /stagedReuse && !replayStarted\(\)/);
     assert.match(fs.readFileSync(path.resolve(__dirname, "../src/experiments/clients/notification-aggregator/client.ts"), "utf8"), /stagedArrival && !replayStarted\(\)/);
     assert.match(runnerSource, /local override_name\n  override_name="EXPERIMENT_NETWORK_INTERFACE_\$\(printf '%s' "\$role" \| tr '\[:lower:\]' '\[:upper:\]'\)"\n  local override="\$\{!override_name:-\}"/);
+    const clientLaunchFunction = runnerSource.slice(runnerSource.indexOf("client_launch_command() {"), runnerSource.indexOf("\n}\n\nreplayer_runtime_root"));
+    const serviceLaunchFunction = runnerSource.slice(runnerSource.indexOf("service_launch_command() {"), runnerSource.indexOf("\n}\nservice_monitor_command"));
+    assert.doesNotMatch(clientLaunchFunction, /\\\$/);
+    assert.doesNotMatch(serviceLaunchFunction, /\\\$/);
     const simultaneousStart = runnerSource.indexOf("\n  else\n", stagedStart);
     const simultaneousEnd = runnerSource.indexOf('\n  fi\n  wait "$replayer_pid"', simultaneousStart);
     const simultaneousBranch = runnerSource.slice(simultaneousStart, simultaneousEnd);

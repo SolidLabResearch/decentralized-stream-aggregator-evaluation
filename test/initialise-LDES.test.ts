@@ -70,7 +70,7 @@ assert.match(runnerSource, /client_launch_command\(\)\s*\{/);
 assert.match(runnerSource, /EXPERIMENT_CONFIG_PATH=%s/);
 assert.match(runnerSource, /client_launch_command "\$iteration_dir"/);
 assert.match(runnerSource, /all_client_ready_markers_command\(\)/);
-assert.match(runnerSource, /client-\\\$client_id-ready\.json/);
+assert.match(runnerSource, /client-\$client_id-ready\.json/);
 assert.match(runnerSource, /all client confirmed-ready markers/);
 assert.match(runnerSource, /wait_for_command "first Heimdall R2R result"/);
 assert.match(runnerSource, /EXPERIMENT_STOP_AFTER_FIRST_WINDOW:-false/);

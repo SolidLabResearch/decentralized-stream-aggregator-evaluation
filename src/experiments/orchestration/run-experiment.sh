@@ -67,7 +67,7 @@ client_launch_command() {
   [[ -n "$client_ids" ]] && client_args+=" --client-ids $(shell_quote "$client_ids")"
   [[ -n "$launch_marker" ]] && client_args+=" --launch-marker $(shell_quote "$launch_marker")"
   [[ "$skip_host_monitor" == "true" ]] && client_args+=" --skip-host-monitor"
-  printf 'cd "%s" && (setsid env EXPERIMENT_CONFIG_PATH=%s EXPERIMENT_RUN_ID=%s EVALUATION_REPOSITORY_SHA=%s RSP_JS_REPOSITORY_SHA=%s SERVICE_REPOSITORY_SHA=%s npx ts-node %s %s > "%s/%s" 2>&1 & client_pid=\$!; printf '\''%%s\\n'\'' "\$client_pid" > "%s"; wait "\$client_pid")' \
+  printf 'cd "%s" && (setsid env EXPERIMENT_CONFIG_PATH=%s EXPERIMENT_RUN_ID=%s EVALUATION_REPOSITORY_SHA=%s RSP_JS_REPOSITORY_SHA=%s SERVICE_REPOSITORY_SHA=%s npx ts-node %s %s > "%s/%s" 2>&1 & client_pid=$!; printf '\''%%s\\n'\'' "$client_pid" > "%s"; wait "$client_pid")' \
     "$evaluation_path" "$(shell_quote "$client_config_path")" "$(shell_quote "$iteration_run_id")" \
     "$(shell_quote "$evaluation_sha")" "$(shell_quote "$rsp_js_sha")" "$(shell_quote "$service_sha")" "$(shell_quote "$launcher")" "$client_args" "$iteration_output_dir" "$launcher_log" "$pid_file"
 }
@@ -88,7 +88,7 @@ csv_operation_count_command() {
 service_resource_header='timestamp,cpu_user_jiffies,cpu_system_jiffies,rss_bytes,wall_delta_ms,cpu_utilization_percent'
 service_launch_command() {
   local iteration_dir="$1"
-  printf 'mkdir -p %s; printf "%s\\n" > %s; setsid bash -c %s > %s/service.log 2>&1 & service_pgid=\$!; printf "%%s\\n" "\$service_pgid" > %s/service.pgid; service_pid="\$service_pgid"; for attempt in $(seq 1 30); do descendants="\$service_pgid"; while test -n "\$descendants"; do next=""; for candidate in \$descendants; do if test "$(ps -o comm= -p "\$candidate" 2>/dev/null | tr -d " ")" = node; then service_pid="\$candidate"; descendants=""; break; fi; next="\$next $(pgrep -P "\$candidate" 2>/dev/null || true)"; done; descendants="\$next"; done; test "\$service_pid" != "\$service_pgid" && break; sleep 1; done; printf "%%s\\n" "\$service_pid" > %s/service.pid; wait "\$service_pgid"' \
+  printf 'mkdir -p %s; printf "%s\\n" > %s; setsid bash -c %s > %s/service.log 2>&1 & service_pgid=$!; printf "%%s\\n" "$service_pgid" > %s/service.pgid; service_pid="$service_pgid"; for attempt in $(seq 1 30); do descendants="$service_pgid"; while test -n "$descendants"; do next=""; for candidate in $descendants; do if test "$(ps -o comm= -p "$candidate" 2>/dev/null | tr -d " ")" = node; then service_pid="$candidate"; descendants=""; break; fi; next="$next $(pgrep -P "$candidate" 2>/dev/null || true)"; done; descendants="$next"; done; test "$service_pid" != "$service_pgid" && break; sleep 1; done; printf "%%s\\n" "$service_pid" > %s/service.pid; wait "$service_pgid"' \
     "$(remote_path_expression "$service_results_root/$iteration_dir")" "$service_resource_header" "$(remote_path_expression "$service_results_root/$iteration_dir/service-resource.csv")" "$service_start_exec_quoted" "$(remote_path_expression "$service_results_root/$iteration_dir")" "$(remote_path_expression "$service_results_root/$iteration_dir")" "$(remote_path_expression "$service_results_root/$iteration_dir")"
 }
 service_monitor_command() {
@@ -106,25 +106,25 @@ heimdall_first_result_ready_command() {
 }
 without_aggregator_first_result_ready_command() {
   local iteration_dir="$1"
-  printf 'iteration_dir=%s; for csv in "\$iteration_dir"/client-*-operations.csv; do test -f "\$csv" && awk -F, '\''NR == 1 { for (i = 1; i <= NF; i++) if ($i == "operation") operation_column = i; next } operation_column && $operation_column == "r2r_first_result" { found=1 } END { exit !found }'\'' "\$csv" && exit 0; done; exit 1' "$(remote_path_expression "$evaluation_path/$iteration_dir")"
+  printf 'iteration_dir=%s; for csv in "$iteration_dir"/client-*-operations.csv; do test -f "$csv" && awk -F, '\''NR == 1 { for (i = 1; i <= NF; i++) if ($i == "operation") operation_column = i; next } operation_column && $operation_column == "r2r_first_result" { found=1 } END { exit !found }'\'' "$csv" && exit 0; done; exit 1' "$(remote_path_expression "$evaluation_path/$iteration_dir")"
 }
 all_client_first_result_markers_ready_command() {
   local iteration_dir="$1"
-  printf 'iteration_dir=%s; for client_id in $(seq 0 %s); do test -f "\$iteration_dir/client-\$client_id-first-result.ready" || exit 1; done' "$(remote_path_expression "$evaluation_path/$iteration_dir")" "$((client_count - 1))"
+  printf 'iteration_dir=%s; for client_id in $(seq 0 %s); do test -f "$iteration_dir/client-$client_id-first-result.ready" || exit 1; done' "$(remote_path_expression "$evaluation_path/$iteration_dir")" "$((client_count - 1))"
 }
 all_client_ready_markers_command() {
   local iteration_dir="$1"
-  printf 'iteration_dir=%s; count=0; for client_id in $(seq 0 %s); do marker="\$iteration_dir/client-\$client_id-ready.json"; test -s "\$marker" || exit 1; count=$((count + 1)); done; test "\$count" -eq %s' "$(remote_path_expression "$evaluation_path/$iteration_dir")" "$((client_count - 1))" "$client_count"
+  printf 'iteration_dir=%s; count=0; for client_id in $(seq 0 %s); do marker="$iteration_dir/client-$client_id-ready.json"; test -s "$marker" || exit 1; count=$((count + 1)); done; test "$count" -eq %s' "$(remote_path_expression "$evaluation_path/$iteration_dir")" "$((client_count - 1))" "$client_count"
 }
 late_client_ready_markers_command() {
   local iteration_dir="$1"
   if (( client_count <= 1 )); then printf 'true'; return; fi
-  printf 'iteration_dir=%s; for client_id in $(seq 1 %s); do test -s "\$iteration_dir/client-\$client_id-ready.json" || exit 1; done' "$(remote_path_expression "$evaluation_path/$iteration_dir")" "$((client_count - 1))"
+  printf 'iteration_dir=%s; for client_id in $(seq 1 %s); do test -s "$iteration_dir/client-$client_id-ready.json" || exit 1; done' "$(remote_path_expression "$evaluation_path/$iteration_dir")" "$((client_count - 1))"
 }
 late_client_first_result_markers_ready_command() {
   local iteration_dir="$1"
   if (( client_count <= 1 )); then printf 'true'; return; fi
-  printf 'iteration_dir=%s; for client_id in $(seq 1 %s); do test -s "\$iteration_dir/client-\$client_id-first-result.ready" || exit 1; done' "$(remote_path_expression "$evaluation_path/$iteration_dir")" "$((client_count - 1))"
+  printf 'iteration_dir=%s; for client_id in $(seq 1 %s); do test -s "$iteration_dir/client-$client_id-first-result.ready" || exit 1; done' "$(remote_path_expression "$evaluation_path/$iteration_dir")" "$((client_count - 1))"
 }
 staged_phase_marker_command() {
   local iteration_dir="$1" marker="$2" phase="$3"
@@ -168,7 +168,7 @@ notification_aggregator_staged_reuse_ready_command() {
 }
 staged_no_client_results_command() {
   local iteration_dir="$1"
-  printf 'iteration_dir=%s; for marker in "\$iteration_dir"/client-*-first-result.ready; do test ! -e "\$marker" || exit 1; done' "$(remote_path_expression "$evaluation_path/$iteration_dir")"
+  printf 'iteration_dir=%s; for marker in "$iteration_dir"/client-*-first-result.ready; do test ! -e "$marker" || exit 1; done' "$(remote_path_expression "$evaluation_path/$iteration_dir")"
 }
 staged_no_service_result_command() {
   local processing_csv="$1"
