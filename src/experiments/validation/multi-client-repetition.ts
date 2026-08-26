@@ -16,6 +16,7 @@ function rows(file: string): Array<Record<string, string>> {
 function requireFile(file: string, errors: string[]): void { if (!fs.existsSync(file)) errors.push(`missing ${file}`); }
 function hasOperation(file: string, operation: string): boolean { return rows(file).some((row) => row.operation === operation); }
 function heimdallReuseKey(query: string): string { return crypto.createHash("md5").update(query.replace(/\s/g, "")).digest("hex"); }
+function finiteNonNegative(value: string | undefined): boolean { return value !== undefined && value.trim() !== "" && Number.isFinite(Number(value)) && Number(value) >= 0; }
 
 export function validateMultiClientRepetition(iterationDirectory: string, approach: string, clientCount: number): Validation {
     const errors: string[] = [];
@@ -61,6 +62,13 @@ export function validateMultiClientRepetition(iterationDirectory: string, approa
         const ooo = `${prefix}-out-of-order.csv`;
         [operations, resource, results, ooo, `${prefix}-ready.json`, `${prefix}-first-result.ready`].forEach((file) => requireFile(file, errors));
         if (stagedArrival) [`${prefix}-registration.json`, `${prefix}-first-result.json`].forEach((file) => requireFile(file, errors));
+        if (fs.existsSync(resource)) {
+            const resourceRows = rows(resource);
+            const resourceHeader = fs.readFileSync(resource, "utf8").split(/\r?\n/, 1)[0].split(",");
+            for (const column of ["timestamp", "cpu_user", "cpu_system", "rss", "cpu_user_delta_us", "cpu_system_delta_us", "wall_delta_us", "cpu_utilization_percent"]) if (!resourceHeader.includes(column)) errors.push(`missing ${column} in ${resource}`);
+            if (!resourceRows.length) errors.push(`${resource} has no samples`);
+            if (resourceRows.length && !resourceRows.some((row) => finiteNonNegative(row.rss) && finiteNonNegative(row.cpu_utilization_percent))) errors.push(`${resource} has no usable CPU/RSS sample`);
+        }
         if (fs.existsSync(results) && rows(results).length === 0) errors.push(`${results} has no result observation`);
         if (!fs.existsSync(operations)) continue;
         const operationRows = rows(operations);
