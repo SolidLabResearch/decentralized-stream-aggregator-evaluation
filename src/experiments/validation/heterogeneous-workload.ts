@@ -26,6 +26,8 @@ export function expectedWorkload(mode: WorkloadMode, instance: number): Expected
     if (!isFormalWorkload(mode, instance)) throw new Error(`Invalid formal workload combination: ${mode}/instance-${instance}.`);
     return { queryVariant: mode === "same-query-same-data" ? "Q0" : (`Q${instance}` as Expected["queryVariant"]), dataVariant: mode === "different-query-different-data" ? (["A", "B", "C"] as const)[instance] : "A" };
 }
+function expectedDescriptor(instance: number): string { return instance === 0 ? "saref:relatesToProperty dahccsensors:wearable.acceleration.x" : instance === 1 ? "saref:measurementMadeBy dahccsensors:E4.A03846.Accelerometer" : "dcterms:isVersionOf saref:Measurement"; }
+function expectedQueryLabel(instance: number): string { return instance === 0 ? "Q0_property" : instance === 1 ? "Q1_sensor" : "Q2_measurement_type"; }
 
 function readMetadata(directory: string): any | undefined { try { return JSON.parse(fs.readFileSync(path.join(directory, "metadata.json"), "utf8")); } catch { return undefined; } }
 function visitMetadata(root: string): string[] { if (!fs.existsSync(root)) return []; return fs.readdirSync(root, { withFileTypes: true }).flatMap(entry => { const candidate = path.join(root, entry.name); return entry.isDirectory() ? visitMetadata(candidate) : entry.name === "metadata.json" ? [path.dirname(candidate)] : []; }); }
@@ -43,14 +45,14 @@ export function validateHeterogeneousWorkload(iterationDirectory: string, approa
     if (isFormalWorkload(mode, instance)) {
         const expected = expectedWorkload(mode, instance);
         if (metadata.queryVariant !== expected.queryVariant) errors.push(`expected ${expected.queryVariant}, found ${metadata.queryVariant}`);
+        if (metadata.queryVariantLabel !== expectedQueryLabel(instance)) errors.push(`expected ${expectedQueryLabel(instance)}, found ${metadata.queryVariantLabel}`);
         if (metadata.dataVariant !== expected.dataVariant) errors.push(`expected data ${expected.dataVariant}, found ${metadata.dataVariant}`);
         if (metadata.replayerDataVariant !== expected.dataVariant) errors.push(`expected replayer data ${expected.dataVariant}, found ${metadata.replayerDataVariant}`);
         if (workload && JSON.stringify(workload.streams) !== JSON.stringify(metadata.streamTriplet)) errors.push("metadata stream triplet does not match client workload");
         const expectedSegment = `segment-0${expected.dataVariant === "A" ? 1 : expected.dataVariant === "B" ? 2 : 3}`;
         if (!metadata.streamTriplet || Object.values(metadata.streamTriplet).some(value => typeof value !== "string" || !value.includes(`/heterogeneous/${expectedSegment}/`))) errors.push(`stream triplet does not target ${expectedSegment}`);
         if (typeof metadata.queryText !== "string" || typeof metadata.queryHash !== "string" || crypto.createHash("sha256").update(metadata.queryText).digest("hex") !== metadata.queryHash) errors.push("metadata query text/hash mismatch");
-        const expectedBind = mode === "same-query-same-data" ? undefined : `BIND("variant-${instance}" AS ?queryVariant)`;
-        if (typeof metadata.queryText === "string" && (expectedBind ? !metadata.queryText.includes(expectedBind) : metadata.queryText.includes("?queryVariant"))) errors.push("query text does not match the expected deterministic query variant");
+        if (typeof metadata.queryText === "string" && (!metadata.queryText.includes(expectedDescriptor(instance)) || metadata.queryText.includes("?queryVariant") || metadata.queryText.includes("BIND(\"variant-"))) errors.push("query text does not match the expected descriptor-pattern query variant");
         if (workload && workload.queryHash !== metadata.queryHash) errors.push("client workload query hash does not match metadata query hash");
     }
     if (!fs.existsSync(path.join(iterationDirectory, "network.csv"))) errors.push("missing network.csv");
@@ -76,7 +78,7 @@ export function validateHeterogeneousCampaign(root: string): Validation {
             const metadata = metadataByRun.get(attempt.run_id);
             if (!metadata) { errors.push(`${label}/${attempt.run_id} is marked valid but has no metadata`); continue; }
             const expected = expectedWorkload(workload.mode, workload.instance);
-            if (metadata.approach !== approach || metadata.clientCount !== 1 || metadata.workloadMode !== workload.mode || metadata.workloadInstance !== workload.instance || metadata.queryVariant !== expected.queryVariant || metadata.dataVariant !== expected.dataVariant || metadata.replayerDataVariant !== expected.dataVariant) errors.push(`${label}/${attempt.run_id} metadata does not match its formal workload`);
+            if (metadata.approach !== approach || metadata.clientCount !== 1 || metadata.workloadMode !== workload.mode || metadata.workloadInstance !== workload.instance || metadata.queryVariant !== expected.queryVariant || metadata.queryVariantLabel !== expectedQueryLabel(workload.instance) || metadata.dataVariant !== expected.dataVariant || metadata.replayerDataVariant !== expected.dataVariant) errors.push(`${label}/${attempt.run_id} metadata does not match its formal workload`);
         }
     }
     return { valid: errors.length === 0, errors };

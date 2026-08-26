@@ -6,7 +6,7 @@
   ],
   "frequency_event": 32,
   "frequency_buffer": 4,
-  "file_location": "<SET_TO_THE_GENERATED_SEGMENT_03_4HZ_NT_PATH_ON_N078_06>",
+  "file_location": "/users/kbisenug/dahcc-benchmark-dataset/heterogeneous/segment-03/4Hz.nt",
   "is_ldes": true,
   "tree_path": "https://saref.etsi.org/core/hasTimestamp"
 }

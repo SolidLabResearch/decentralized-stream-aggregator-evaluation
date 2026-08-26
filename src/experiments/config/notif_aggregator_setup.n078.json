@@ -1,0 +1,5 @@
+{
+  "__comment__": "Copy only into a run-owned Notification Aggregator clone; do not alter the tracked recovered service checkout.",
+  "notif_aggregator_http_server_url": "http://n078-22.wall1.ilabt.imec.be:8085/",
+  "notif_aggregator_ws_server_url": "ws://n078-22.wall1.ilabt.imec.be:8085/"
+}

@@ -2,6 +2,7 @@
   "scripts": {
     "check:experiments": "tsc --project tsconfig.experiments.json --noEmit",
     "test:experiments": "ts-node test/initialise-LDES.test.ts && ts-node test/experiments-hardening.test.ts && ts-node test/heterogeneous-workloads.test.ts",
+    "test:heterogeneous-datasets": "python3 test/heterogeneous-segments.test.py",
     "test:network-traffic": "ts-node test/network-traffic.test.ts",
     "test:without-aggregator": "ts-node test/without-aggregator-parsing.test.ts",
     "analyze:network-traffic": "ts-node src/experiments/network/analyze-network.ts",

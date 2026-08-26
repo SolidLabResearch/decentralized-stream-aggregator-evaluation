@@ -89,6 +89,11 @@ export function workloadVariants(config: ExperimentConfig): { queryVariant: "Q0"
     return { queryVariant, dataVariant };
 }
 
+export function queryVariantLabel(config: ExperimentConfig): "Q0_property" | "Q1_sensor" | "Q2_measurement_type" {
+    const queryVariant = workloadVariants(config).queryVariant;
+    return queryVariant === "Q0" ? "Q0_property" : queryVariant === "Q1" ? "Q1_sensor" : "Q2_measurement_type";
+}
+
 export function replayerDataVariant(config: ExperimentConfig): "A" | "B" | "C" {
     const expected = workloadVariants(config).dataVariant;
     if (config.experiment.replayerDataVariant !== undefined && config.experiment.replayerDataVariant !== expected) throw new Error(`Invalid experiment configuration: replayerDataVariant ${config.experiment.replayerDataVariant} does not match data variant ${expected}.`);

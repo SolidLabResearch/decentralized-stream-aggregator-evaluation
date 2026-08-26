@@ -1,7 +1,7 @@
 import { ChildProcess, fork } from "child_process";
 import * as fs from "fs";
 import * as path from "path";
-import { loadExperimentConfig, replayerDataVariant, resolveStreams, workloadInstance, workloadMode, workloadVariants } from "../../config/config";
+import { loadExperimentConfig, queryVariantLabel, replayerDataVariant, resolveStreams, workloadInstance, workloadMode, workloadVariants } from "../../config/config";
 import { sha256 } from "./instrumentation";
 import { monitorHostResources } from "../../monitoring/host-monitor";
 
@@ -73,7 +73,7 @@ export function launchConfiguredClients(approach: Approach, clientModule: string
         approach, frequencyHz: config.experiment.frequencyHz, clientCount: config.experiment.clientCount,
         clientArrivalMode: config.experiment.clientArrivalMode,
         workloadMode: workloadMode(config),
-        workloadInstance: instance, queryVariant: variants.queryVariant, dataVariant: variants.dataVariant, replayerDataVariant: replayerDataVariant(config),
+        workloadInstance: instance, queryVariant: variants.queryVariant, queryVariantLabel: queryVariantLabel(config), dataVariant: variants.dataVariant, replayerDataVariant: replayerDataVariant(config),
         arrivalMode: config.experiment.clientArrivalMode === "staged-reuse" ? "staged" : "simultaneous", architectureBehavior,
         launchedClientIds: Array.from(new Set([...previousClientIds, ...clientIndices])).sort((a, b) => a - b),
         launches: [...previousLaunches, { clientIds: clientIndices, timestamp: new Date().toISOString() }],

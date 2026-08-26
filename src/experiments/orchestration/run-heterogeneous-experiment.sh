@@ -34,8 +34,15 @@ if [[ -z "$replayer_command" && "$mode" != "--dry-run" ]]; then
   echo "Set $replayer_variable to one 4 Hz replayer command for data variant $data_variant." >&2
   exit 2
 fi
+if [[ "$mode" != "--dry-run" ]]; then
+  normalized_replayer_command="$(printf '%s' "$replayer_command" | tr '[:upper:]' '[:lower:]' | tr -d '[:space:]')"
+  if [[ "$normalized_replayer_command" == *"placeholder"* || "$normalized_replayer_command" == *"set_to"* || "$normalized_replayer_command" == *"<"* || "$normalized_replayer_command" == *">"* || "$normalized_replayer_command" == *"..."* || "$normalized_replayer_command" == *"n079-"* || "$normalized_replayer_command" == *"experiment-config.n079"* || "$normalized_replayer_command" == *"acc-x-1min"* ]]; then
+    echo "$replayer_variable is a placeholder or historical n079 replayer command/config; configure a dedicated n078 ${data_variant} segment command." >&2
+    exit 2
+  fi
+fi
 
-EXPERIMENT_CONFIG_PATH="$config_path" EXPERIMENT_CONFIG_OVERRIDES="$overrides" EXPERIMENT_RUN_ID="$run_id" EXPERIMENT_OUTPUT_ROOT="$output_root" EXPERIMENT_CLIENT_CONFIG_PATH="$client_config_path" REPLAYER_START_COMMAND="$replayer_command" "$root/src/experiments/orchestration/run-experiment.sh" "$approach" "$mode"
+EXPERIMENT_CONFIG_PATH="$config_path" EXPERIMENT_CONFIG_OVERRIDES="$overrides" EXPERIMENT_RUN_ID="$run_id" EXPERIMENT_OUTPUT_ROOT="$output_root" EXPERIMENT_CLIENT_CONFIG_PATH="$client_config_path" REPLAYER_REPOSITORY_SHA_EXPECTED="a1a2100ea64870da086ec64be1914141eca0fb93" REPLAYER_START_COMMAND="$replayer_command" "$root/src/experiments/orchestration/run-experiment.sh" "$approach" "$mode"
 if [[ -z "$mode" ]]; then
   npx --prefix "$root" ts-node "$root/src/experiments/validation/heterogeneous-workload.ts" "$root/$output_root/iteration-01" "$approach"
 fi
