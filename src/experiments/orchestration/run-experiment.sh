@@ -88,8 +88,8 @@ csv_operation_count_command() {
 service_resource_header='timestamp,cpu_user_jiffies,cpu_system_jiffies,rss_bytes,wall_delta_ms,cpu_utilization_percent'
 service_launch_command() {
   local iteration_dir="$1"
-  printf 'mkdir -p %s; printf "%s\\n" > %s; setsid bash -c %s > %s/service.log 2>&1 & service_pgid=$!; printf "%%s\\n" "$service_pgid" > %s/service.pgid; service_pid="$service_pgid"; for attempt in $(seq 1 30); do descendants="$service_pgid"; while test -n "$descendants"; do next=""; for candidate in $descendants; do if test "$(ps -o comm= -p "$candidate" 2>/dev/null | tr -d " ")" = node; then service_pid="$candidate"; descendants=""; break; fi; next="$next $(pgrep -P "$candidate" 2>/dev/null || true)"; done; descendants="$next"; done; test "$service_pid" != "$service_pgid" && break; sleep 1; done; printf "%%s\\n" "$service_pid" > %s/service.pid; wait "$service_pgid"' \
-    "$(remote_path_expression "$service_results_root/$iteration_dir")" "$service_resource_header" "$(remote_path_expression "$service_results_root/$iteration_dir/service-resource.csv")" "$service_start_exec_quoted" "$(remote_path_expression "$service_results_root/$iteration_dir")" "$(remote_path_expression "$service_results_root/$iteration_dir")" "$(remote_path_expression "$service_results_root/$iteration_dir")"
+  printf 'mkdir -p %s; printf "%s\\n" > %s; setsid bash -c %s > %s/service.log 2>&1 & service_pgid=$!; printf "%%s\\n" "$service_pgid" > %s/service.pgid; service_pid=""; for attempt in $(seq 1 %s); do descendants="$service_pgid"; while test -n "$descendants"; do next=""; for candidate in $descendants; do if test "$(ps -o comm= -p "$candidate" 2>/dev/null | tr -d " ")" = node; then service_pid="$candidate"; break 3; fi; next="$next $(pgrep -P "$candidate" 2>/dev/null || true)"; done; descendants="$next"; done; sleep 1; done; if test -z "$service_pid"; then echo "service launch: Node PID was not discovered within %s seconds" >&2; kill -TERM -- "-$service_pgid" 2>/dev/null || true; exit 1; fi; printf "%%s\\n" "$service_pid" > %s/service.pid; wait "$service_pgid"' \
+    "$(remote_path_expression "$service_results_root/$iteration_dir")" "$service_resource_header" "$(remote_path_expression "$service_results_root/$iteration_dir/service-resource.csv")" "$service_start_exec_quoted" "$(remote_path_expression "$service_results_root/$iteration_dir")" "$(remote_path_expression "$service_results_root/$iteration_dir")" "${SERVICE_NODE_DISCOVERY_ATTEMPTS:-30}" "${SERVICE_NODE_DISCOVERY_ATTEMPTS:-30}" "$(remote_path_expression "$service_results_root/$iteration_dir")"
 }
 service_monitor_command() {
   local iteration_dir="$1"
@@ -346,12 +346,13 @@ for iteration in $(seq 1 "$iterations"); do
     experiment_ssh "$replayer_host" "$replayer_launch_command" >"$root/$iteration_dir/replayer.log" 2>&1 & replayer_pid=$!
   fi
   workload_failed=false
+  infrastructure_failed=false
   wait_for_replay_measurement_window "$replay_deadline" "$iteration_dir" || workload_failed=true
   capture_network_snapshots end "iteration-$(printf '%02d' "$iteration")"
   stop_replayer_process_group
   kill "$replayer_pid" 2>/dev/null || true; wait "$replayer_pid" 2>/dev/null || true
   cleanup
-  if [[ -n "$service_monitor_pid" ]]; then wait "$service_monitor_pid" || { echo "Service resource monitor failed." >&2; exit 1; }; fi
+  if [[ -n "$service_monitor_pid" ]] && ! wait "$service_monitor_pid"; then echo "Service resource monitor failed." >&2; infrastructure_failed=true; fi
   pids=("$client_pid" "$client_phase_b_ssh_pid"); if [[ -n "$service_pid" ]]; then pids+=("$service_pid"); fi
   kill "${pids[@]}" 2>/dev/null || true; wait "${pids[@]}" 2>/dev/null || true
   experiment_scp_from "$client_host" "$evaluation_path/$iteration_dir" "$root/$output_root/"
@@ -367,5 +368,5 @@ for iteration in $(seq 1 "$iterations"); do
   fi
   npx --prefix "$root" ts-node src/experiments/network/collect-network.ts --output "$root/$iteration_dir/network.csv" --approach "$approach" --run-id "$run_id" --client-count "$client_count" --iteration "$iteration" --input-dir "$root/$iteration_dir/network"
   if [[ "$service_host" != "none" ]]; then experiment_scp_from "$service_host" "$service_iteration_dir" "$root/$iteration_dir/service"; if [[ -f "$root/$iteration_dir/service/resource.csv" ]]; then cp "$root/$iteration_dir/service/resource.csv" "$root/$iteration_dir/service-resource.csv"; elif [[ -f "$root/$iteration_dir/service/service-resource.csv" ]]; then cp "$root/$iteration_dir/service/service-resource.csv" "$root/$iteration_dir/service-resource.csv"; fi; fi
-  [[ "$workload_failed" != true ]] || exit 1
+  [[ "$workload_failed" != true && "$infrastructure_failed" != true ]] || exit 1
 done

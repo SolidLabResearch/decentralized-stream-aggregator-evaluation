@@ -17,6 +17,10 @@ function requireFile(file: string, errors: string[]): void { if (!fs.existsSync(
 function hasOperation(file: string, operation: string): boolean { return rows(file).some((row) => row.operation === operation); }
 function heimdallReuseKey(query: string): string { return crypto.createHash("md5").update(query.replace(/\s/g, "")).digest("hex"); }
 function finiteNonNegative(value: string | undefined): boolean { return value !== undefined && value.trim() !== "" && Number.isFinite(Number(value)) && Number(value) >= 0; }
+function isCanonicalW1WindowId(windowId: string | undefined): boolean {
+    const match = /^https:\/\/rsp\.js\/w1:\[(\d+),(\d+)\)$/.exec(windowId || "");
+    return Boolean(match && BigInt(match[1]) < BigInt(match[2]));
+}
 
 export function validateMultiClientRepetition(iterationDirectory: string, approach: string, clientCount: number): Validation {
     const errors: string[] = [];
@@ -96,14 +100,20 @@ export function validateMultiClientRepetition(iterationDirectory: string, approa
         for (const row of operationRows.filter((value) => value.operation === "window_query_processing" || value.operation === "r2r_first_result")) {
             if (!row.window_id || BigInt(row.start_monotonic_ns || "-1") > BigInt(row.end_monotonic_ns || "-1")) errors.push(`invalid W1 ordering/window identity for client ${client}`);
         }
-        if (approach !== "heimdall" && !operationRows.some(row => row.operation === "r2r_first_result" && /^\/w1:/.test(row.window_id || ""))) errors.push(`missing canonical /w1: r2r_first_result for client ${client}`);
+        if (approach !== "heimdall" && !operationRows.some(row => row.operation === "r2r_first_result" && isCanonicalW1WindowId(row.window_id))) errors.push(`missing canonical W1 r2r_first_result for client ${client}`);
     }
     const hostResource = path.join(iterationDirectory, "client-host-resource.csv"); requireFile(hostResource, errors);
     if (fs.existsSync(hostResource)) { const hostRows = rows(hostResource); const header = fs.readFileSync(hostResource, "utf8").split(/\r?\n/, 1)[0].split(","); for (const column of ["cpu_user", "cpu_nice", "cpu_system", "cpu_idle", "cpu_iowait", "cpu_irq", "cpu_softirq", "cpu_steal"]) if (!header.includes(column)) errors.push(`missing raw host CPU column ${column}`); if (!hostRows.length) errors.push(`${hostResource} has no samples`); }
     if (approach === "heimdall" || approach === "notification-aggregator") requireFile(path.join(iterationDirectory, "service-resource.csv"), errors);
     if (approach === "notification-aggregator") {
         const serviceResource = path.join(iterationDirectory, "service-resource.csv");
-        if (fs.existsSync(serviceResource) && rows(serviceResource).length === 0) errors.push(`${serviceResource} has no service resource samples`);
+        if (fs.existsSync(serviceResource)) {
+            const serviceRows = rows(serviceResource);
+            const serviceHeader = fs.readFileSync(serviceResource, "utf8").split(/\r?\n/, 1)[0].split(",");
+            for (const column of ["timestamp", "cpu_user_jiffies", "cpu_system_jiffies", "rss_bytes", "wall_delta_ms", "cpu_utilization_percent"]) if (!serviceHeader.includes(column)) errors.push(`missing ${column} in ${serviceResource}`);
+            if (!serviceRows.length) errors.push(`${serviceResource} has no service resource samples`);
+            if (serviceRows.length && !serviceRows.some((row) => finiteNonNegative(row.rss_bytes) && finiteNonNegative(row.cpu_utilization_percent))) errors.push(`${serviceResource} has no usable CPU/RSS sample`);
+        }
     }
     if (approach === "heimdall") {
         const metadataPath = path.join(iterationDirectory, "metadata.json");
@@ -121,7 +131,7 @@ export function validateMultiClientRepetition(iterationDirectory: string, approa
             for (let client = 0; client < clientCount; client += 1) if (!clients.has(String(client))) errors.push(`Heimdall client ${client} was not associated with the shared query`);
             if (stagedReuse && serviceRows.filter(row => row.operation === "stream_subscription").length !== 3) errors.push(`expected exactly three shared Heimdall upstream stream subscriptions, found ${serviceRows.filter(row => row.operation === "stream_subscription").length}`);
         }
-        if (fs.existsSync(service) && rows(service).filter(row => row.operation === "r2r_first_result" && /^\/w1:/.test(row.window_id || "")).length !== 1) errors.push("Heimdall must have exactly one shared service-side /w1: r2r_first_result");
+        if (fs.existsSync(service) && rows(service).filter(row => row.operation === "r2r_first_result" && isCanonicalW1WindowId(row.window_id)).length !== 1) errors.push("Heimdall must have exactly one shared service-side canonical W1 r2r_first_result");
     }
     if (approach === "notification-aggregator" && stagedArrival) {
         const serviceLog = path.join(iterationDirectory, "service", "service.log");
