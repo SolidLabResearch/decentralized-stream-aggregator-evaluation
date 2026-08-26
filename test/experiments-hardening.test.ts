@@ -116,7 +116,8 @@ test "$(wc -l < "$root/calls")" -eq 3
         remoteHelper("late_client_ready_markers_command", "late_client_first_result_markers_ready_command"),
         remoteHelper("late_client_first_result_markers_ready_command", "staged_phase_marker_command"),
         remoteHelper("without_aggregator_first_result_ready_command", "all_client_first_result_markers_ready_command"),
-        remoteHelper("staged_no_client_results_command", "staged_no_service_result_command")
+        remoteHelper("staged_no_client_results_command", "staged_no_service_result_command"),
+        remoteHelper("staged_no_service_result_command", "print_plan")
     ].join("\n");
     const remoteHelperHarness = execFileSync("bash", ["-c", `
 set -euo pipefail
@@ -136,6 +137,7 @@ late_ready_command=$(late_client_ready_markers_command iteration-01)
 late_first_command=$(late_client_first_result_markers_ready_command iteration-01)
 no_result_command=$(staged_no_client_results_command iteration-01)
 without_command=$(without_aggregator_first_result_ready_command iteration-01)
+no_service_result_command=$(staged_no_service_result_command "$root/iteration-01/window-processing.csv")
 for command in "$ready_command" "$first_command" "$late_ready_command" "$late_first_command" "$no_result_command" "$without_command"; do
   case "$command" in *'\\$iteration_dir'*|*'\\$marker'*|*'\\$client_id'*) exit 1 ;; esac
 done
@@ -155,6 +157,11 @@ if bash -c "$no_result_command"; then exit 1; fi
 printf 'operation\\n' > "$root/iteration-01/client-0-operations.csv"
 printf 'r2r_first_result\\n' >> "$root/iteration-01/client-0-operations.csv"
 bash -c "$without_command" || { echo "without-aggregator helper failed: $without_command" >&2; exit 1; }
+bash -c "$no_service_result_command" || { echo "absent processing.csv should pass: $no_service_result_command" >&2; exit 1; }
+printf 'operation\\nwindow_query_processing\\n' > "$root/iteration-01/window-processing.csv"
+bash -c "$no_service_result_command" || { echo "processing.csv without r2r_first_result should pass: $no_service_result_command" >&2; exit 1; }
+printf 'r2r_first_result\\n' >> "$root/iteration-01/window-processing.csv"
+if bash -c "$no_service_result_command"; then echo "processing.csv with r2r_first_result should fail: $no_service_result_command" >&2; exit 1; fi
 `, "remote-helper-harness"], { cwd: path.resolve(__dirname, "..") }).toString();
     assert.strictEqual(remoteHelperHarness, "", "generated remote marker helpers expand variables and execute locally");
     const stagedStart = runnerSource.indexOf('  if [[ "$client_arrival_mode" == "staged-reuse" ]]', runnerSource.indexOf('client_phase_b_ssh_pid=""'));

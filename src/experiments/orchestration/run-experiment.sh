@@ -172,7 +172,7 @@ staged_no_client_results_command() {
 }
 staged_no_service_result_command() {
   local processing_csv="$1"
-  printf 'if test -f %s; then ! awk -F, '\''NR == 1 { for (i = 1; i <= NF; i++) if ($i == "operation") operation_column = i; next } operation_column && $operation_column == "r2r_first_result" { found = 1 } END { exit found }'\'' %s; fi' \
+  printf 'if test -f %s; then awk -F, '\''NR == 1 { for (i = 1; i <= NF; i++) if ($i == "operation") operation_column = i; next } operation_column && $operation_column == "r2r_first_result" { found = 1 } END { exit found }'\'' %s; fi' \
     "$(remote_path_expression "$processing_csv")" "$(remote_path_expression "$processing_csv")"
 }
 print_plan() {
