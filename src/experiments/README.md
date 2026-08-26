@@ -12,8 +12,8 @@ values.
 
 `experiment.clientArrivalMode` defaults to `simultaneous`, preserving the
 original benchmark. Set it to `staged-reuse` with Heimdall or Notification
-Aggregator to launch client 0, wait for its genuine first result, and then launch
-clients 1..N-1 together.
+Aggregator to launch client 0, establish its query/subscription readiness, then
+launch clients 1..N-1 together and wait for all clients to be ready before replay.
 
 Set `experiment.clientCount` to `2` for the smoke test, or to a final matrix
 count of `1`, `5`, `10`, `20`, or `30`. Each value launches that many
@@ -46,9 +46,11 @@ late clients report `reuse_registration_to_first_result`; Notification
 Aggregator late clients report `join_registration_to_first_result`. The client
 records the architecture-specific registration boundary and first-result
 monotonic timestamps, result payload hash, and result/window identifier when
-present. The Notification Aggregator registration boundary is the first
-outbound stream-subscription request; JSON/control messages are excluded from
-staged first-result boundaries.
+present. Every staged first-result boundary is gated by the explicit replay-start
+phase marker, so no readiness acknowledgement, cached result, or pre-replay
+result is counted. The Notification Aggregator registration boundary is the
+first outbound stream-subscription request; JSON/control messages are excluded
+from staged first-result boundaries.
 
 The architectures retain different meanings: Heimdall validates one shared RSP
 query creation, N-1 query reuse registrations, and three upstream subscriptions;

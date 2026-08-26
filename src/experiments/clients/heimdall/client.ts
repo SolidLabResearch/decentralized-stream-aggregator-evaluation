@@ -37,6 +37,7 @@ websocket.on("message", (data) => {
         if (stagedReuse && isControlMessage(message)) return;
     } catch { /* Result payloads are not required to be JSON acknowledgements. */ }
     if (stagedReuse && !isGenuineResult(payload)) return;
+    if (stagedReuse && !replayStarted()) return;
     let first: ReturnType<RawInstrumentation["observeFirstResult"]>;
     try { first = raw.observeFirstResult({ resultId: payloadHash, payloadHash, windowId }); } catch (error) { console.error(`Heimdall client ${clientIndex}: ${(error as Error).message}`); void shutdown(1); return; }
     const received = raw.now();
@@ -69,4 +70,8 @@ function resultWindowId(payload: Buffer): string | undefined {
     } catch {
         return undefined;
     }
+}
+
+function replayStarted(): boolean {
+    return fs.existsSync(path.join(outputDirectory, "staged-replay-start.json"));
 }

@@ -44,10 +44,14 @@ The deployed Heimdall and Notifications Aggregator services must emit these
 acknowledgements before a smoke or final run. The evaluator does not infer
 readiness from a client send, a remote timestamp, or the first result itself.
 
-The explicit `staged-reuse` mode is an additive arrival schedule. Heimdall uses
-`cold`/`reuse` roles and shared-query semantics; Notification Aggregator uses
-`cold`/`join` roles and shared-upstream/independent-local-RSP semantics. All
-latency rows use the registration-start/first-subscription to first-genuine-result monotonic interval.
+The explicit `staged-reuse` mode is an additive pre-replay arrival schedule:
+client 0 becomes ready, reuse/join clients register, all clients become ready,
+the architecture-specific reuse/subscription invariant is checked, and only
+then is the replayer started. Heimdall uses `cold`/`reuse` roles and shared-query
+semantics; Notification Aggregator uses `cold`/`join` roles and
+shared-upstream/independent-local-RSP semantics. All latency rows use the
+registration-start/first-subscription to the first genuine post-replay-result
+monotonic interval.
 Result payload hashes and available window/result identifiers are retained with
 the client rows, while query-ready, subscription-ready, status, and other typed
 WebSocket control messages are excluded from staged first-result boundaries.

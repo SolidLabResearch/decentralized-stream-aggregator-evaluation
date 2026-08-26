@@ -33,6 +33,7 @@ async function run(): Promise<void> {
     const emitter = engine.register();
     emitter.on("RStream", (event: any) => {
         for (const item of event.bindings.values()) {
+            if (stagedArrival && !replayStarted()) continue;
             const payload = JSON.stringify(item.value);
             const payloadHash = sha256(payload);
             const resultIdentifier = String(resultId++);
@@ -112,3 +113,7 @@ const shutdown = async (exitCode = 0) => {
 process.once("SIGINT", shutdown);
 process.once("SIGTERM", shutdown);
 run().catch((error) => { console.error(error); void shutdown(1); });
+
+function replayStarted(): boolean {
+    return fs.existsSync(path.join(outputDirectory, "staged-replay-start.json"));
+}

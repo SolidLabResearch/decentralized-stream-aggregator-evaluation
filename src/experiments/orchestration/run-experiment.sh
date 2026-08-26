@@ -132,7 +132,10 @@ staged_phase_marker_command() {
 }
 network_snapshot_base="${EXPERIMENT_NETWORK_SNAPSHOT_ROOT:-.evaluation-network}"
 network_snapshot_command() {
-  local role="$1" route_target="$2" phase="$3" iteration_label="$4" override_name="EXPERIMENT_NETWORK_INTERFACE_${1^^}" override="${!override_name:-}"
+  local role="$1" route_target="$2" phase="$3" iteration_label="$4"
+  local override_name
+  override_name="EXPERIMENT_NETWORK_INTERFACE_$(printf '%s' "$role" | tr '[:lower:]' '[:upper:]')"
+  local override="${!override_name:-}"
   local snapshot_file="$network_snapshot_base/$run_id/$iteration_label/$role.$phase.csv"
   printf 'set -euo pipefail; file=%s; target=%s; override=%s; mkdir -p "$(dirname "$file")"; if test -n "$override"; then interface="$override"; else command -v ip >/dev/null || { echo "network snapshot: ip is unavailable" >&2; exit 1; }; interface=$(ip route get "$target" | awk '\''NR == 1 { for (i = 1; i <= NF; i++) if ($i == "dev") { print $(i + 1); exit } }'\''); fi; test -n "$interface" || { echo "network snapshot: no route interface for $target" >&2; exit 1; }; test "$interface" != lo || { echo "network snapshot: loopback is not permitted" >&2; exit 1; }; test -r "/sys/class/net/$interface/statistics/rx_bytes" && test -r "/sys/class/net/$interface/statistics/tx_bytes" || { echo "network snapshot: selected interface $interface is unavailable" >&2; exit 1; }; epoch=$(date +%%s%%3N); uptime=$(cut -d " " -f 1 /proc/uptime); seconds=${uptime%%.*}; fraction=${uptime#*.}; fraction=${fraction:0:9}; printf -v fraction "%%-9s" "$fraction"; fraction=${fraction// /0}; monotonic="${seconds}${fraction}"; rx=$(cat "/sys/class/net/$interface/statistics/rx_bytes"); tx=$(cat "/sys/class/net/$interface/statistics/tx_bytes"); case "$rx,$tx,$epoch,$monotonic" in *[!0-9,]*) echo "network snapshot: malformed kernel counter" >&2; exit 1;; esac; tmp="$file.tmp.$$"; printf "%%s,%%s,%%s,%%s,%%s,%%s,%%s\\n" %s "$(hostname -s)" "$interface" "$epoch" "$monotonic" "$rx" "$tx" > "$tmp"; mv "$tmp" "$file"' \
     "$(shell_quote "$snapshot_file")" "$(shell_quote "$route_target")" "$(shell_quote "$override")" "$(shell_quote "$role")"
@@ -152,6 +155,25 @@ capture_network_snapshots() {
   for index in "${!snapshot_pids[@]}"; do
     wait "${snapshot_pids[$index]}" || { echo "Network $phase snapshot failed for ${snapshot_labels[$index]}." >&2; return 1; }
   done
+}
+heimdall_staged_reuse_ready_command() {
+  local initialization_csv="$1" expected_clients="$2"
+  printf 'test -f %s && awk -F, '\''BEGIN { expected_reuse = %s - 1 } NR == 1 { for (i = 1; i <= NF; i++) operation_column = ($i == "operation" ? i : operation_column) } NR > 1 && operation_column { counts[$operation_column]++ } END { exit !(counts["shared_query_instance_created"] == 1 && counts["shared_query_instance_reused"] == expected_reuse && counts["query_registration"] == %s && counts["stream_subscription"] == 3) }'\'' %s' \
+    "$(remote_path_expression "$initialization_csv")" "$expected_clients" "$expected_clients" "$(remote_path_expression "$initialization_csv")"
+}
+notification_aggregator_staged_reuse_ready_command() {
+  local service_log="$1"
+  printf 'test -f %s && awk '\''BEGIN { marker = "Subscribed to the inbox container location:" } index($0, marker) { value = substr($0, index($0, marker) + length(marker)); if (!(value in seen)) { seen[value] = 1; unique++ } total++ } END { exit !(total == 3 && unique == 3) }'\'' %s' \
+    "$(remote_path_expression "$service_log")" "$(remote_path_expression "$service_log")"
+}
+staged_no_client_results_command() {
+  local iteration_dir="$1"
+  printf 'iteration_dir=%s; for marker in "\$iteration_dir"/client-*-first-result.ready; do test ! -e "\$marker" || exit 1; done' "$(remote_path_expression "$evaluation_path/$iteration_dir")"
+}
+staged_no_service_result_command() {
+  local processing_csv="$1"
+  printf 'if test -f %s; then ! awk -F, '\''NR == 1 { for (i = 1; i <= NF; i++) if ($i == "operation") operation_column = i; next } operation_column && $operation_column == "r2r_first_result" { found = 1 } END { exit found }'\'' %s; fi' \
+    "$(remote_path_expression "$processing_csv")" "$(remote_path_expression "$processing_csv")"
 }
 print_plan() {
   echo "approach=$approach frequencyHz=$frequency clientCount=$client_count clientArrivalMode=$client_arrival_mode iterations=$iterations durationSeconds=$duration"
@@ -179,9 +201,9 @@ print_plan() {
   else echo "service: $(experiment_ssh_preview "$service_host" "$(service_launch_command iteration-XX)")"; fi
   echo "clients: $(experiment_ssh_preview "$client_host" "$(client_launch_command "$output_root/iteration-XX" "$run_id")")"
   if [[ "$client_arrival_mode" == "staged-reuse" ]]; then
-    echo "staged-client-0: $(experiment_ssh_preview "$client_host" "$(client_launch_command "$output_root/iteration-XX" "$run_id" 0 "$client_phase_a_pid_file" "iteration-XX/staged-client-0-launched.json" false client-phase-a-launcher.log)")"
-    echo "staged-late-clients: $(experiment_ssh_preview "$client_host" "$(client_launch_command "$output_root/iteration-XX" "$run_id" "$late_client_ids" "$client_phase_b_pid_file" "iteration-XX/staged-late-clients-launched.json" true client-phase-b-launcher.log)")"
-    echo "staged-phase-markers: client-0-ready, client-0-first-genuine-result, late-clients-launched, late-clients-ready, late-clients-first-genuine-result, all-late-clients-completed"
+    echo "staged-client-0: $(experiment_ssh_preview "$client_host" "$(client_launch_command "$output_root/iteration-XX" "$run_id" 0 "$client_phase_a_pid_file" "iteration-XX/staged-client-0-launch.json" false client-phase-a-launcher.log)")"
+    echo "staged-reuse-clients: $(experiment_ssh_preview "$client_host" "$(client_launch_command "$output_root/iteration-XX" "$run_id" "$late_client_ids" "$client_phase_b_pid_file" "iteration-XX/staged-reuse-clients-launch.json" true client-phase-b-launcher.log)")"
+    echo "staged-phase-markers: client-0-launch, client-0-ready, reuse-clients-launch, reuse-clients-ready, reuse-validation-complete, all-clients-ready, replay-start, first-genuine-result(s)"
   fi
   echo "client-readiness-markers: $(all_client_ready_markers_command "iteration-XX")"
   echo "client-first-result-markers: $(all_client_first_result_markers_ready_command "iteration-XX")"
@@ -267,27 +289,34 @@ for iteration in $(seq 1 "$iterations"); do
   # In simultaneous mode, all client confirmed-ready markers are required before the replayer starts.
   client_phase_b_ssh_pid=""
   if [[ "$client_arrival_mode" == "staged-reuse" ]]; then
-    experiment_ssh "$client_host" "$(client_launch_command "$iteration_dir" "$run_id-$(printf '%02d' "$iteration")" 0 "$client_phase_a_pid_file" "$iteration_dir/staged-client-0-launched.json" false client-phase-a-launcher.log)" >"$root/$iteration_dir/client-phase-a-launcher.log" 2>&1 & client_pid=$!
+    experiment_ssh "$client_host" "$(client_launch_command "$iteration_dir" "$run_id-$(printf '%02d' "$iteration")" 0 "$client_phase_a_pid_file" "$iteration_dir/staged-client-0-launch.json" false client-phase-a-launcher.log)" >"$root/$iteration_dir/client-phase-a-launcher.log" 2>&1 & client_pid=$!
     wait_for_command_on_host "client 0 confirmed-ready marker" "$client_host" "test -s $(remote_path_expression "$evaluation_path/$iteration_dir/client-0-ready.json")" "${CLIENT_READY_TIMEOUT_SECONDS:-60}" "${EXPERIMENT_FIRST_WINDOW_POLL_INTERVAL_SECONDS:-1}" || { echo "Client 0 did not become ready; replayer will not be started." >&2; exit 1; }
     experiment_ssh "$client_host" "$(staged_phase_marker_command "$iteration_dir" staged-client-0-ready.json client-0-ready)"
+    if (( client_count > 1 )); then
+      experiment_ssh "$client_host" "$(client_launch_command "$iteration_dir" "$run_id-$(printf '%02d' "$iteration")" "$late_client_ids" "$client_phase_b_pid_file" "$iteration_dir/staged-reuse-clients-launch.json" true client-phase-b-launcher.log)" >"$root/$iteration_dir/client-phase-b-launcher.log" 2>&1 & client_phase_b_ssh_pid=$!
+      wait_for_command_on_host "reuse clients launched" "$client_host" "test -s $(remote_path_expression "$evaluation_path/$iteration_dir/staged-reuse-clients-launch.json")" "${CLIENT_READY_TIMEOUT_SECONDS:-60}" "${EXPERIMENT_FIRST_WINDOW_POLL_INTERVAL_SECONDS:-1}" || { echo "Reuse clients were not launched after client 0 became ready." >&2; exit 1; }
+    else
+      experiment_ssh "$client_host" "$(staged_phase_marker_command "$iteration_dir" staged-reuse-clients-launch.json reuse-clients-launch)"
+    fi
+    wait_for_command_on_host "all clients confirmed-ready markers" "$client_host" "$(all_client_ready_markers_command "$iteration_dir")" "${CLIENT_READY_TIMEOUT_SECONDS:-60}" "${EXPERIMENT_FIRST_WINDOW_POLL_INTERVAL_SECONDS:-1}" || { echo "Not all staged clients became ready; replayer will not be started." >&2; exit 1; }
+    experiment_ssh "$client_host" "$(staged_phase_marker_command "$iteration_dir" staged-reuse-clients-ready.json reuse-clients-ready)"
+    if [[ "$approach" == "heimdall" ]]; then
+      wait_for_command "Heimdall staged reuse invariant" "$(heimdall_staged_reuse_ready_command "$service_iteration_dir/initialization.csv" "$client_count")" "${HEIMDALL_QUERY_READY_TIMEOUT_SECONDS:-30}" "${EXPERIMENT_FIRST_WINDOW_POLL_INTERVAL_SECONDS:-1}" || { echo "Heimdall staged reuse invariant was not established before replay." >&2; exit 1; }
+      experiment_ssh "$client_host" "$(staged_no_client_results_command "$iteration_dir")"
+      experiment_ssh "$service_host" "$(staged_no_service_result_command "$service_iteration_dir/window-processing.csv")"
+    elif [[ "$approach" == "notification-aggregator" ]]; then
+      wait_for_command "Notification Aggregator staged upstream invariant" "$(notification_aggregator_staged_reuse_ready_command "$service_iteration_dir/service.log")" "${CLIENT_READY_TIMEOUT_SECONDS:-60}" "${EXPERIMENT_FIRST_WINDOW_POLL_INTERVAL_SECONDS:-1}" || { echo "Notification Aggregator staged upstream invariant was not established before replay." >&2; exit 1; }
+      experiment_ssh "$client_host" "$(staged_no_client_results_command "$iteration_dir")"
+    fi
+    experiment_ssh "$client_host" "$(staged_phase_marker_command "$iteration_dir" staged-reuse-validation-complete.json reuse-validation-complete)"
+    experiment_ssh "$client_host" "$(staged_phase_marker_command "$iteration_dir" staged-all-clients-ready.json all-clients-ready)"
     capture_network_snapshots start "iteration-$(printf '%02d' "$iteration")"
+    experiment_ssh "$client_host" "$(staged_phase_marker_command "$iteration_dir" staged-replay-start.json replay-start)"
     experiment_ssh "$replayer_host" "$replayer_launch_command" >"$root/$iteration_dir/replayer.log" 2>&1 & replayer_pid=$!
-    wait_for_command_on_host "client 0 first genuine result marker" "$client_host" "test -s $(remote_path_expression "$evaluation_path/$iteration_dir/client-0-first-result.ready")" "$duration" "${EXPERIMENT_FIRST_WINDOW_POLL_INTERVAL_SECONDS:-1}" || { echo "Client 0 did not produce a first genuine result within ${duration}s after replay started." >&2; exit 1; }
-    experiment_ssh "$client_host" "$(staged_phase_marker_command "$iteration_dir" staged-client-0-first-genuine-result.json client-0-first-genuine-result)"
     if [[ "$approach" == "heimdall" && "${EXPERIMENT_STOP_AFTER_FIRST_WINDOW:-false}" == "true" ]]; then
       wait_for_command "first Heimdall R2R result" "$(heimdall_first_result_ready_command "$service_iteration_dir/window-processing.csv")" "$duration" "${EXPERIMENT_FIRST_WINDOW_POLL_INTERVAL_SECONDS:-1}" || { echo "No r2r_first_result appeared within ${duration}s after replay started." >&2; exit 1; }
     fi
-    if (( client_count > 1 )); then
-      experiment_ssh "$client_host" "$(client_launch_command "$iteration_dir" "$run_id-$(printf '%02d' "$iteration")" "$late_client_ids" "$client_phase_b_pid_file" "$iteration_dir/staged-late-clients-launched.json" true client-phase-b-launcher.log)" >"$root/$iteration_dir/client-phase-b-launcher.log" 2>&1 & client_phase_b_ssh_pid=$!
-      wait_for_command_on_host "late clients launched" "$client_host" "test -s $(remote_path_expression "$evaluation_path/$iteration_dir/staged-late-clients-launched.json")" "${CLIENT_READY_TIMEOUT_SECONDS:-60}" "${EXPERIMENT_FIRST_WINDOW_POLL_INTERVAL_SECONDS:-1}" || { echo "Late clients were not launched after client 0's first genuine result." >&2; exit 1; }
-      experiment_ssh "$client_host" "$(staged_phase_marker_command "$iteration_dir" staged-late-clients-phase.json late-clients-launched)"
-      wait_for_command_on_host "late clients confirmed-ready markers" "$client_host" "$(late_client_ready_markers_command "$iteration_dir")" "${CLIENT_READY_TIMEOUT_SECONDS:-60}" "${EXPERIMENT_FIRST_WINDOW_POLL_INTERVAL_SECONDS:-1}" || { echo "A late client did not become ready." >&2; exit 1; }
-      experiment_ssh "$client_host" "$(staged_phase_marker_command "$iteration_dir" staged-late-clients-ready.json late-clients-ready)"
-      wait_for_command_on_host "late clients first genuine result markers" "$client_host" "$(late_client_first_result_markers_ready_command "$iteration_dir")" "$duration" "${EXPERIMENT_FIRST_WINDOW_POLL_INTERVAL_SECONDS:-1}" || { echo "A late client did not produce a genuine post-registration result." >&2; exit 1; }
-      experiment_ssh "$client_host" "$(staged_phase_marker_command "$iteration_dir" staged-all-late-clients-completed.json all-late-clients-completed)"
-    else
-      experiment_ssh "$client_host" "$(staged_phase_marker_command "$iteration_dir" staged-all-late-clients-completed.json all-late-clients-completed)"
-    fi
+    wait_for_command_on_host "all client first-result markers" "$client_host" "$(all_client_first_result_markers_ready_command "$iteration_dir")" "$duration" "${EXPERIMENT_FIRST_WINDOW_POLL_INTERVAL_SECONDS:-1}" || { echo "Not all staged clients produced a first result after replay started." >&2; exit 1; }
   else
     experiment_ssh "$client_host" "$(client_launch_command "$iteration_dir" "$run_id-$(printf '%02d' "$iteration")")" >"$root/$iteration_dir/client-launcher.log" 2>&1 & client_pid=$!
     wait_for_command_on_host "all client confirmed-ready markers" "$client_host" "$(all_client_ready_markers_command "$iteration_dir")" "${CLIENT_READY_TIMEOUT_SECONDS:-60}" "${EXPERIMENT_FIRST_WINDOW_POLL_INTERVAL_SECONDS:-1}" || { echo "Not all $client_count clients became ready; replayer will not be started." >&2; exit 1; }

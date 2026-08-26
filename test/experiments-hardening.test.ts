@@ -12,17 +12,18 @@ import { resolveClientIndices } from "../src/experiments/clients/shared/runtime"
 import * as crypto from "crypto";
 import { execFileSync } from "child_process";
 
-function writeHeimdallFixture(directory: string, creations: number, clientHashes?: string[], staged = false): void {
+function writeHeimdallFixture(directory: string, creations: number, clientHashes?: string[], staged = false, clientCount = 2): void {
     const query = buildActivityIndexQuery(loadExperimentConfig(path.resolve(__dirname, "../src/experiments/config/experiment-config.n079.test.json")).streams);
     const key = crypto.createHash("md5").update(query.replace(/\s/g, "")).digest("hex");
     fs.writeFileSync(path.join(directory, "metadata.json"), JSON.stringify({ queryHash: crypto.createHash("sha256").update(query).digest("hex"), queryText: query, ...(staged ? { clientArrivalMode: "staged-reuse" } : {}) }));
     fs.writeFileSync(path.join(directory, "client-host-resource.csv"), "timestamp,cpu_user,cpu_nice,cpu_system,cpu_idle,cpu_iowait,cpu_irq,cpu_softirq,cpu_steal\n1,1,1,1,1,1,1,1,1\n");
     fs.writeFileSync(path.join(directory, "service-resource.csv"), "timestamp\n1\n"); fs.mkdirSync(path.join(directory, "service"));
-    const initialization = ["run_id,approach,client_id,query_id,operation", ...Array.from({ length: creations }, (_, index) => `run,heimdall,${index},${key},shared_query_instance_created`), `run,heimdall,1,${key},shared_query_instance_reused`, ...(staged ? [`run,heimdall,0,${key},stream_subscription`, `run,heimdall,0,${key},stream_subscription`, `run,heimdall,0,${key},stream_subscription`] : [])].join("\n") + "\n";
+    const initializationRows = ["run_id,approach,client_id,query_id,operation", ...Array.from({ length: creations }, (_, index) => `run,heimdall,${index},${key},shared_query_instance_created`), ...(clientCount > 1 ? [`run,heimdall,1,${key},shared_query_instance_reused`] : []), ...(staged ? [...Array.from({ length: clientCount }, (_, index) => `run,heimdall,${index},${key},query_registration`), `run,heimdall,0,${key},stream_subscription`, `run,heimdall,0,${key},stream_subscription`, `run,heimdall,0,${key},stream_subscription`] : [])];
+    const initialization = initializationRows.join("\n") + "\n";
     fs.writeFileSync(path.join(directory, "service", "initialization.csv"), initialization);
     fs.writeFileSync(path.join(directory, "service", "window-processing.csv"), "operation,window_id\nr2r_first_result,/w1: shared\n");
-    for (let client = 0; client < 2; client += 1) { const prefix = path.join(directory, `client-${client}`); const hash = clientHashes?.[client] || crypto.createHash("sha256").update(query).digest("hex"); const operation = staged ? (client === 0 ? "cold_registration_to_first_result" : "reuse_registration_to_first_result") : "registration_to_first_result"; const role = staged ? `,${client === 0 ? "cold" : "reuse"}` : ""; fs.writeFileSync(`${prefix}-operations.csv`, `client_id,query_id,operation,duration_ms,start_monotonic_ns,end_monotonic_ns${staged ? ",client_role" : ""}\n${client},${hash},${operation},1,1,2${role}\n`); fs.writeFileSync(`${prefix}-resource.csv`, "timestamp\n1\n"); fs.writeFileSync(`${prefix}-results.csv`, staged ? "result_id,result_monotonic_ns\nr,2\n" : "result\nx\n"); fs.writeFileSync(`${prefix}-out-of-order.csv`, "event\n"); fs.writeFileSync(`${prefix}-ready.json`, "{}\n"); fs.writeFileSync(`${prefix}-first-result.ready`, "ok\n"); if (staged) { fs.writeFileSync(`${prefix}-registration.json`, JSON.stringify({ registration_monotonic_ns: 1 })); fs.writeFileSync(`${prefix}-first-result.json`, JSON.stringify({ client_role: client === 0 ? "cold" : "reuse", result_monotonic_ns: 2 })); } }
-    if (staged) { for (const marker of ["staged-client-0-ready.json", "staged-late-clients-phase.json", "staged-late-clients-ready.json", "staged-all-late-clients-completed.json"]) fs.writeFileSync(path.join(directory, marker), "{}\n"); fs.writeFileSync(path.join(directory, "staged-client-0-first-genuine-result.json"), JSON.stringify({ epoch_ms: 1 }) + "\n"); fs.writeFileSync(path.join(directory, "staged-late-clients-launched.json"), JSON.stringify({ client_ids: [1], launched_epoch_ms: 2 }) + "\n"); }
+    for (let client = 0; client < clientCount; client += 1) { const prefix = path.join(directory, `client-${client}`); const hash = clientHashes?.[client] || crypto.createHash("sha256").update(query).digest("hex"); const operation = staged ? (client === 0 ? "cold_registration_to_first_result" : "reuse_registration_to_first_result") : "registration_to_first_result"; const role = staged ? `,${client === 0 ? "cold" : "reuse"}` : ""; fs.writeFileSync(`${prefix}-operations.csv`, `client_id,query_id,operation,duration_ms,start_monotonic_ns,end_monotonic_ns${staged ? ",client_role" : ""}\n${client},${hash},${operation},1,1,2${role}\n`); fs.writeFileSync(`${prefix}-resource.csv`, "timestamp\n1\n"); fs.writeFileSync(`${prefix}-results.csv`, staged ? "result_id,result_epoch_ms,result_monotonic_ns\nr,11,2\n" : "result\nx\n"); fs.writeFileSync(`${prefix}-out-of-order.csv`, "event\n"); fs.writeFileSync(`${prefix}-ready.json`, "{}\n"); fs.writeFileSync(`${prefix}-first-result.ready`, "ok\n"); if (staged) { fs.writeFileSync(`${prefix}-registration.json`, JSON.stringify({ registration_monotonic_ns: 1 })); fs.writeFileSync(`${prefix}-first-result.json`, JSON.stringify({ client_role: client === 0 ? "cold" : "reuse", result_epoch_ms: 11, result_monotonic_ns: 2 })); } }
+    if (staged) { const markers = ["staged-client-0-launch.json", "staged-client-0-ready.json", "staged-reuse-clients-launch.json", "staged-reuse-clients-ready.json", "staged-reuse-validation-complete.json", "staged-all-clients-ready.json", "staged-replay-start.json"]; markers.forEach((marker, index) => fs.writeFileSync(path.join(directory, marker), JSON.stringify(index === 0 ? { launched_epoch_ms: 1 } : index === 2 && clientCount > 1 ? { client_ids: [1], launched_epoch_ms: 3 } : { phase: marker, epoch_ms: index + 1 }) + "\n")); }
 }
 
 function writeNotificationStagedFixture(directory: string): void {
@@ -36,15 +37,15 @@ function writeNotificationStagedFixture(directory: string): void {
         const role = client === 0 ? "cold" : "join";
         const latency = client === 0 ? "cold_registration_to_first_result" : "join_registration_to_first_result";
         fs.writeFileSync(`${prefix}-operations.csv`, `client_id,query_id,operation,window_id,duration_ms,start_monotonic_ns,end_monotonic_ns,client_role\n${client},q,stream_discovery,,,1,2,${role}\n${client},q,stream_subscription,,,2,3,${role}\n${client},q,parsing_timestamp_extraction,,,3,4,${role}\n${client},q,rsp_insertion,/w1: local,,4,5,${role}\n${client},q,r2r_first_result,/w1: local,,5,6,${role}\n${client},q,${latency},,1,1,2,${role}\n`);
-        fs.writeFileSync(`${prefix}-results.csv`, "result_id,result_monotonic_ns\n0,2\n");
+        fs.writeFileSync(`${prefix}-results.csv`, "result_id,result_epoch_ms,result_monotonic_ns\n0,11,2\n");
         fs.writeFileSync(`${prefix}-resource.csv`, "timestamp\n1\n");
         fs.writeFileSync(`${prefix}-out-of-order.csv`, "event\n");
         fs.writeFileSync(`${prefix}-ready.json`, "{}\n");
         fs.writeFileSync(`${prefix}-first-result.ready`, "ok\n");
         fs.writeFileSync(`${prefix}-registration.json`, JSON.stringify({ registration_monotonic_ns: 1 }));
-        fs.writeFileSync(`${prefix}-first-result.json`, JSON.stringify({ client_role: role, result_monotonic_ns: 2 }));
+        fs.writeFileSync(`${prefix}-first-result.json`, JSON.stringify({ client_role: role, result_epoch_ms: 11, result_monotonic_ns: 2 }));
     }
-    for (const marker of ["staged-client-0-ready.json", "staged-client-0-first-genuine-result.json", "staged-late-clients-launched.json", "staged-late-clients-phase.json", "staged-late-clients-ready.json", "staged-all-late-clients-completed.json"]) fs.writeFileSync(path.join(directory, marker), JSON.stringify(marker === "staged-client-0-first-genuine-result.json" ? { epoch_ms: 1 } : marker === "staged-late-clients-launched.json" ? { client_ids: [1], launched_epoch_ms: 2 } : {}) + "\n");
+    ["staged-client-0-launch.json", "staged-client-0-ready.json", "staged-reuse-clients-launch.json", "staged-reuse-clients-ready.json", "staged-reuse-validation-complete.json", "staged-all-clients-ready.json", "staged-replay-start.json"].forEach((marker, index) => fs.writeFileSync(path.join(directory, marker), JSON.stringify(index === 0 ? { launched_epoch_ms: 1 } : index === 2 ? { client_ids: [1], launched_epoch_ms: 3 } : { phase: marker, epoch_ms: index + 1 }) + "\n"));
 }
 
 async function main(): Promise<void> {
@@ -75,6 +76,10 @@ async function main(): Promise<void> {
     const captureEnd = runnerSource.indexOf("\n}\nprint_plan()", captureStart);
     assert.ok(captureStart >= 0 && captureEnd > captureStart, "capture_network_snapshots function is present");
     const captureFunction = runnerSource.slice(captureStart, captureEnd + 2);
+    const networkStart = runnerSource.indexOf("network_snapshot_command() {");
+    const networkEnd = runnerSource.indexOf("\ncapture_network_snapshots()", networkStart);
+    assert.ok(networkStart >= 0 && networkEnd > networkStart, "network_snapshot_command function is present");
+    const networkFunction = runnerSource.slice(networkStart, networkEnd);
     const snapshotHarness = execFileSync("bash", ["-c", `
 set -euo pipefail
 root=$(mktemp -d)
@@ -85,6 +90,13 @@ client_host=client
 pod_host=pod
 replayer_host=replayer
 service_host=none
+network_snapshot_base=.evaluation-network
+run_id=local-test
+shell_quote() { printf "'%s'" "$1"; }
+EXPERIMENT_NETWORK_INTERFACE_SOLID=eth-test
+${networkFunction}
+network_command=$(network_snapshot_command solid target start iteration-01)
+case "$network_command" in *"override='eth-test'"*) ;; *) exit 1 ;; esac
 network_snapshot_command() { printf ':'; }
 experiment_ssh() { printf '%s\\n' "$1" >> "$root/calls"; }
 ${captureFunction}
@@ -92,10 +104,32 @@ capture_network_snapshots start iteration-01
 test "$(wc -l < "$root/calls")" -eq 3
 `, "snapshot-harness"], { cwd: path.resolve(__dirname, "..") }).toString();
     assert.strictEqual(snapshotHarness, "", "capture_network_snapshots executes locally with its snapshot arrays");
+    const stagedStart = runnerSource.indexOf('  if [[ "$client_arrival_mode" == "staged-reuse" ]]', runnerSource.indexOf('client_phase_b_ssh_pid=""'));
+    const stagedBranch = runnerSource.slice(stagedStart, runnerSource.indexOf("\n  else\n", stagedStart));
+    const sourceOrder = (text: string, token: string): number => { const index = text.indexOf(token); assert.ok(index >= 0, `staged runner contains ${token}`); return index; };
+    assert.ok(sourceOrder(stagedBranch, "staged-client-0-launch.json") < sourceOrder(stagedBranch, "client 0 confirmed-ready marker"));
+    assert.ok(sourceOrder(stagedBranch, "client 0 confirmed-ready marker") < sourceOrder(stagedBranch, "staged-reuse-clients-launch.json"));
+    assert.ok(sourceOrder(stagedBranch, "staged-reuse-clients-launch.json") < sourceOrder(stagedBranch, "all clients confirmed-ready markers"));
+    assert.ok(sourceOrder(stagedBranch, "all clients confirmed-ready markers") < sourceOrder(stagedBranch, "staged-reuse-validation-complete.json"));
+    assert.ok(sourceOrder(stagedBranch, "staged-reuse-validation-complete.json") < sourceOrder(stagedBranch, "staged-replay-start.json"));
+    assert.ok(sourceOrder(stagedBranch, "staged-replay-start.json") < sourceOrder(stagedBranch, 'experiment_ssh "$replayer_host" "$replayer_launch_command"'));
+    assert.ok(!stagedBranch.includes("client 0 first genuine result marker"), "staged reuse does not wait for client 0's result before joining");
+    assert.match(stagedBranch, /staged_no_client_results_command/);
+    assert.match(fs.readFileSync(path.resolve(__dirname, "../src/experiments/clients/heimdall/client.ts"), "utf8"), /stagedReuse && !replayStarted\(\)/);
+    assert.match(fs.readFileSync(path.resolve(__dirname, "../src/experiments/clients/notification-aggregator/client.ts"), "utf8"), /stagedArrival && !replayStarted\(\)/);
+    assert.match(runnerSource, /local override_name\n  override_name="EXPERIMENT_NETWORK_INTERFACE_\$\(printf '%s' "\$role" \| tr '\[:lower:\]' '\[:upper:\]'\)"\n  local override="\$\{!override_name:-\}"/);
+    const simultaneousStart = runnerSource.indexOf("\n  else\n", stagedStart);
+    const simultaneousEnd = runnerSource.indexOf('\n  fi\n  wait "$replayer_pid"', simultaneousStart);
+    const simultaneousBranch = runnerSource.slice(simultaneousStart, simultaneousEnd);
+    assert.ok(sourceOrder(simultaneousBranch, "all client confirmed-ready markers") < sourceOrder(simultaneousBranch, 'capture_network_snapshots start'));
+    assert.ok(sourceOrder(simultaneousBranch, 'capture_network_snapshots start') < sourceOrder(simultaneousBranch, 'experiment_ssh "$replayer_host" "$replayer_launch_command"'));
+    assert.match(runnerSource, /without_aggregator_first_result_ready_command/);
     const validationDirectory = fs.mkdtempSync(path.join(os.tmpdir(), "heimdall-reuse-")); writeHeimdallFixture(validationDirectory, 1); assert.deepStrictEqual(validateMultiClientRepetition(validationDirectory, "heimdall", 2), { valid: true, errors: [] }, "one creation and one reuse passes"); fs.rmSync(validationDirectory, { recursive: true, force: true });
     const duplicateDirectory = fs.mkdtempSync(path.join(os.tmpdir(), "heimdall-duplicate-")); writeHeimdallFixture(duplicateDirectory, 2); assert.ok(!validateMultiClientRepetition(duplicateDirectory, "heimdall", 2).valid, "two shared creations fail"); fs.rmSync(duplicateDirectory, { recursive: true, force: true });
     const mismatchDirectory = fs.mkdtempSync(path.join(os.tmpdir(), "heimdall-mismatch-")); writeHeimdallFixture(mismatchDirectory, 1, [undefined as unknown as string, "wrong"]); assert.ok(!validateMultiClientRepetition(mismatchDirectory, "heimdall", 2).valid, "a mismatching client hash fails"); fs.rmSync(mismatchDirectory, { recursive: true, force: true });
     const stagedDirectory = fs.mkdtempSync(path.join(os.tmpdir(), "heimdall-staged-")); writeHeimdallFixture(stagedDirectory, 1, undefined, true); assert.deepStrictEqual(validateMultiClientRepetition(stagedDirectory, "heimdall", 2), { valid: true, errors: [] }, "staged cold/reuse evidence passes"); fs.rmSync(stagedDirectory, { recursive: true, force: true });
+    const preReplayResultDirectory = fs.mkdtempSync(path.join(os.tmpdir(), "heimdall-staged-pre-replay-result-")); writeHeimdallFixture(preReplayResultDirectory, 1, undefined, true); fs.writeFileSync(path.join(preReplayResultDirectory, "client-1-first-result.json"), JSON.stringify({ client_role: "reuse", result_epoch_ms: 6, result_monotonic_ns: 2 })); assert.ok(!validateMultiClientRepetition(preReplayResultDirectory, "heimdall", 2).valid, "pre-replay first results are rejected"); fs.rmSync(preReplayResultDirectory, { recursive: true, force: true });
+    const stagedSingleDirectory = fs.mkdtempSync(path.join(os.tmpdir(), "heimdall-staged-single-")); writeHeimdallFixture(stagedSingleDirectory, 1, undefined, true, 1); assert.deepStrictEqual(validateMultiClientRepetition(stagedSingleDirectory, "heimdall", 1), { valid: true, errors: [] }, "staged N=1 creation/no-reuse evidence passes"); fs.rmSync(stagedSingleDirectory, { recursive: true, force: true });
     const notificationDirectory = fs.mkdtempSync(path.join(os.tmpdir(), "notification-staged-")); writeNotificationStagedFixture(notificationDirectory); assert.deepStrictEqual(validateMultiClientRepetition(notificationDirectory, "notification-aggregator", 2), { valid: true, errors: [] }, "staged notification join evidence passes"); fs.rmSync(notificationDirectory, { recursive: true, force: true });
 }
 main().then(() => console.log("experiment hardening tests passed"));
