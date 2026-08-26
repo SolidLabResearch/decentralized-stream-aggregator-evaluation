@@ -4,7 +4,7 @@
     "http://n078-03.wall1.ilabt.imec.be:3000/pod1/heterogeneous/segment-03/acc-y/",
     "http://n078-03.wall1.ilabt.imec.be:3000/pod1/heterogeneous/segment-03/acc-z/"
   ],
-  "frequency_event": 32,
+  "frequency_event": 4,
   "frequency_buffer": 4,
   "file_location": "/users/kbisenug/dahcc-benchmark-dataset/heterogeneous/segment-03/4Hz.nt",
   "is_ldes": true,

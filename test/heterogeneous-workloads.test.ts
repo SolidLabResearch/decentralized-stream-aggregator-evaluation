@@ -65,6 +65,12 @@ assert.strictEqual(new Set(diffData.map(value => JSON.stringify(value))).size, 3
 assert.strictEqual(new Set(diffData.flatMap(value => [value.x, value.y, value.z])).size, 9, "C variants resolve nine logical stream URLs");
 assert.strictEqual(formalWorkloadConfigurations().length, 7, "there are seven formal workload configurations");
 
+for (const segment of ["01", "02", "03"]) {
+    const replayer = JSON.parse(fs.readFileSync(path.resolve(root, `src/experiments/config/replayer.n078.heterogeneous.segment-${segment}.json`), "utf8"));
+    assert.strictEqual(replayer.frequency_event, 4, `segment-${segment} replayer uses 4 Hz event frequency`);
+    assert.strictEqual(replayer.frequency_buffer, 4, `segment-${segment} replayer uses 4 Hz buffer frequency`);
+}
+
 // The benchmark observation shape deliberately carries all three descriptor predicates on the same subject.
 const representativeObservation = `<obs> <https://saref.etsi.org/core/hasValue> "1.0" .\n<obs> <https://saref.etsi.org/core/relatesToProperty> <https://dahcc.idlab.ugent.be/Homelab/SensorsAndActuators/wearable.acceleration.x> .\n<obs> <https://saref.etsi.org/core/measurementMadeBy> <https://dahcc.idlab.ugent.be/Homelab/SensorsAndActuators/E4.A03846.Accelerometer> .\n<obs> <http://purl.org/dc/terms/isVersionOf> <https://saref.etsi.org/core/Measurement> .`;
 for (const predicate of ["relatesToProperty", "measurementMadeBy", "isVersionOf"]) assert.match(representativeObservation, new RegExp(predicate));

@@ -34,6 +34,8 @@ Data A/B/C are non-overlapping temporal portions of the same audited DAHCC parti
 
 The output root contains `manifest.json` and `segment-01/`, `segment-02/`, and `segment-03/`, each with `4Hz.nt` (240 original source lines) and `provenance.json`. Provenance records the complete target grid, selected source index/timestamp, absolute error in microseconds and milliseconds, selection invariants, source metadata, and output SHA256. The manifest records all three output/provenance hashes and cross-segment disjointness. Segment A is segment-01, B is segment-02, and C is segment-03.
 
+The original `32Hz.nt` recording is approximately 32 Hz and is used only as the source for deterministic selection/downsampling. The generated segment files are fixed 4 Hz datasets, and each heterogeneous replayer configuration sets both `frequency_event: 4` and `frequency_buffer: 4`. Thus replay configuration and every experimental workload run at the same fixed 4 Hz rate; the original approximately 32 Hz recording is not the runtime event rate.
+
 The three `acc-x`, `acc-y`, and `acc-z` URLs in each replayer configuration are logical locations required by the evaluation's three-stream topology. They are not claims that the one source recording contains three physical axes. A replayer invocation publishes the same selected segment to those three logical locations.
 
 ## Replayer and topology
