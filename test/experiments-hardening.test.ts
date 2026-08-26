@@ -9,6 +9,7 @@ import { validateMultiClientRepetition } from "../src/experiments/validation/mul
 import { buildActivityIndexQuery } from "../src/experiments/config/query";
 import { loadExperimentConfig } from "../src/experiments/config/config";
 import { resolveClientIndices } from "../src/experiments/clients/shared/runtime";
+import { insertParsedNotificationEvent, parseNotificationEvent } from "../src/experiments/clients/notification-aggregator/event-parsing";
 import * as crypto from "crypto";
 import { execFileSync } from "child_process";
 
@@ -71,6 +72,22 @@ async function main(): Promise<void> {
     assert.deepStrictEqual(resolveClientIndices(5, ["node", "launcher"]), [0, 1, 2, 3, 4]);
     assert.deepStrictEqual(resolveClientIndices(5, ["node", "launcher", "--client-ids", "0,2,4"]), [0, 2, 4]);
     assert.throws(() => resolveClientIndices(5, ["node", "launcher", "--client-ids", "1,1"]), /unique/);
+    const timestampPredicate = "https://saref.etsi.org/core/hasTimestamp";
+    const validEvent = `@prefix ex: <https://example.org/>. <https://example.org/event-1> <${timestampPredicate}> "2026-08-26T01:00:00.000Z"; ex:value "one".`;
+    const validParsed = parseNotificationEvent({ stream: "https://example.org/stream", published_time: "1999-01-01T00:00:00.000Z", event: validEvent }, "https://example.org/stream", timestampPredicate);
+    assert.strictEqual(validParsed.timestamp, Date.parse("2026-08-26T01:00:00.000Z"), "RSP insertion uses the RDF event timestamp, not published_time");
+    assert.strictEqual(validParsed.quads.length, 2, "all parsed event quads are available for RSP insertion");
+    let insertedEvent: Set<any> | undefined; let insertedTimestamp: number | undefined; let insertedEventId: string | undefined;
+    insertParsedNotificationEvent({ add: (event, timestamp, eventId) => { insertedEvent = event; insertedTimestamp = timestamp; insertedEventId = eventId; } }, validParsed);
+    assert.strictEqual(insertedEvent?.size, validParsed.quads.length, "all parsed quads are inserted as one RDF stream event");
+    assert.strictEqual(insertedTimestamp, validParsed.timestamp, "inserted event uses the RDF event timestamp");
+    assert.strictEqual(insertedEventId, validParsed.eventId, "inserted event retains its deterministic identifier");
+    assert.ok(validParsed.eventId, "aggregator-only messages receive a deterministic fallback event identifier");
+    assert.strictEqual(validParsed.eventId, parseNotificationEvent({ stream: "https://example.org/stream", published_time: "1999-01-01T00:00:00.000Z", event: validEvent }, "https://example.org/stream", timestampPredicate).eventId, "event identifier fallback is stable");
+    assert.throws(() => parseNotificationEvent({ stream: "https://example.org/stream", event: "@prefix ex: <https://example.org/>. ex:event ex:value \"one\"." }, "https://example.org/stream", timestampPredicate), /missing LDES event-time predicate .*predicates present: https:\/\/example.org\/value/);
+    assert.throws(() => parseNotificationEvent({ stream: "https://example.org/stream", event: `@prefix ex: <https://example.org/>. ex:event <${timestampPredicate}> "not-a-timestamp".` }, "https://example.org/stream", timestampPredicate), /Invalid event timestamp "not-a-timestamp"/);
+    const secondParsed = parseNotificationEvent({ stream: "https://example.org/stream", event: `@prefix ex: <https://example.org/>. ex:event <${timestampPredicate}> "2026-08-26T01:00:01.000Z".` }, "https://example.org/stream", timestampPredicate);
+    assert.strictEqual(secondParsed.timestamp, Date.parse("2026-08-26T01:00:01.000Z"), "sequential notification events parse independently");
     const runnerSource = fs.readFileSync(path.resolve(__dirname, "../src/experiments/orchestration/run-experiment.sh"), "utf8");
     const captureStart = runnerSource.indexOf("capture_network_snapshots() {");
     const captureEnd = runnerSource.indexOf("\n}\nprint_plan()", captureStart);

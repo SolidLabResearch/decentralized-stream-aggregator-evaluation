@@ -8,9 +8,8 @@ import { buildActivityIndexQuery } from "../../config/query";
 import { monitorCurrentProcess } from "../../monitoring/process-monitor";
 import { clientRuntime } from "../shared/runtime";
 import { ClientRole, MAX_OUT_OF_ORDERNESS_MS, RawInstrumentation, sha256 } from "../shared/instrumentation";
+import { insertParsedNotificationEvent, NotificationEventMessage, parseNotificationEvent } from "./event-parsing";
 
-const N3 = require("n3");
-const parser = new N3.Parser();
 const config = loadExperimentConfig();
 const { clientIndex, outputDirectory, runId } = clientRuntime();
 const query = buildActivityIndexQuery(config.streams);
@@ -77,6 +76,7 @@ function subscribe(stream: RDFStream, bucketStrategy: string): Promise<void> {
         });
         socket.on("message", (data) => {
             try {
+                const received = raw.now();
                 const message = JSON.parse(data.toString());
                 if (message.type === "subscription_ready") {
                     if (message.stream !== stream.name) { reject(new Error(`Unexpected subscription_ready stream ${message.stream}`)); return; }
@@ -84,16 +84,16 @@ function subscribe(stream: RDFStream, bucketStrategy: string): Promise<void> {
                     return;
                 }
                 if (typeof message.event !== "string") throw new Error("Unexpected notification-aggregator message before an event payload.");
-                const eventId = message.object || message.id || message.eventUrl;
+                const websocketEnd = raw.now();
+                raw.write({ operation: "websocket_message", streamId: stream.name, startEpochMs: received.epochMs, endEpochMs: websocketEnd.epochMs, startMonotonicNs: received.monotonicNs, endMonotonicNs: websocketEnd.monotonicNs });
                 const start = raw.now();
-                const store = new N3.Store();
-                parser.parse(message.event, (error: Error | null, quad: any) => { if (error) throw error; if (quad) store.addQuad(quad); });
-                const value = store.getQuads(null, bucketStrategy, null, null)[0].object.value;
+                const parsed = parseNotificationEvent(message as NotificationEventMessage, stream.name, bucketStrategy);
                 const end = raw.now();
-                raw.write({ operation: "parsing_timestamp_extraction", eventId, streamId: stream.name, startEpochMs: start.epochMs, endEpochMs: end.epochMs, startMonotonicNs: start.monotonicNs, endMonotonicNs: end.monotonicNs });
-                for (const quad of store.getQuads(null, null, null, null)) stream.add(quad, Date.parse(value), eventId);
+                raw.write({ operation: "parsing_timestamp_extraction", eventId: parsed.eventId, streamId: stream.name, startEpochMs: start.epochMs, endEpochMs: end.epochMs, startMonotonicNs: start.monotonicNs, endMonotonicNs: end.monotonicNs });
+                insertParsedNotificationEvent(stream, parsed);
             } catch (error) {
                 console.error(`Notification client ${clientIndex}: ${(error as Error).message}`);
+                void shutdown(1);
             }
         });
         socket.on("error", reject);
