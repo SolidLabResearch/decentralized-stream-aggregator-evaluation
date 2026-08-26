@@ -18,7 +18,7 @@ SSH_USER="${EXPERIMENT_SSH_USER:-$(read_config 'c.ssh.user')}"; SSH_BASTION="${E
 SSH_IDENTITY_FILE="${EXPERIMENT_SSH_IDENTITY_FILE:-$(read_config 'c.ssh.identityFile === null ? "" : c.ssh.identityFile')}"; SSH_CONNECT_TIMEOUT_SECONDS="${EXPERIMENT_SSH_CONNECT_TIMEOUT_SECONDS:-$(read_config 'c.ssh.connectTimeoutSeconds')}"
 experiment_ssh_args
 evaluation_path="$(experiment_remote_path "$(read_config 'c.remotePaths.evaluation')")"; heimdall_path="$(experiment_remote_path "$(read_config 'c.remotePaths.heimdall')")"; notification_aggregator_path="$(experiment_remote_path "$(read_config 'c.remotePaths.notificationAggregator')")"; rsp_js_path="$(experiment_remote_path "$(read_config 'c.remotePaths.rspJs')")"; replayer_path="$(experiment_remote_path "$(read_config 'c.remotePaths.replayer')")"
-evaluation_sha="${EVALUATION_REPOSITORY_SHA_EXPECTED:-$(git rev-parse HEAD)}"; heimdall_sha="${HEIMDALL_REPOSITORY_SHA_EXPECTED:-aa4a674ca03c7eb5a0e0e626ea5a8b3d190a9fef}"; notification_aggregator_sha="${NOTIFICATION_AGGREGATOR_REPOSITORY_SHA_EXPECTED:-7623967531a4f8a9558c7a8fb91c4ab428199ef5}"; rsp_js_sha="${RSP_JS_SHA_EXPECTED:-70a0037afac24017094d1522019184320be4fe37}"; replayer_sha="${REPLAYER_REPOSITORY_SHA_EXPECTED:-a98ec1cba14f4437bb0bbefd915fb07e79a454fe}"
+evaluation_sha="${EVALUATION_REPOSITORY_SHA_EXPECTED:-$(git rev-parse HEAD)}"; heimdall_sha="${HEIMDALL_REPOSITORY_SHA_EXPECTED:-aa4a674ca03c7eb5a0e0e626ea5a8b3d190a9fef}"; notification_aggregator_sha="${NOTIFICATION_AGGREGATOR_REPOSITORY_SHA_EXPECTED:-7623967531a4f8a9558c7a8fb91c4ab428199ef5}"; rsp_js_sha="${RSP_JS_SHA_EXPECTED:-92a065c2db975f1ec06352521cd49be9e665b33d}"; replayer_sha="${REPLAYER_REPOSITORY_SHA_EXPECTED:-a98ec1cba14f4437bb0bbefd915fb07e79a454fe}"
 launcher="src/experiments/clients/$approach/launcher.ts"; run_id="${EXPERIMENT_RUN_ID:-$(date -u +%Y%m%dT%H%M%SZ)}"; output_root="results/4hz/$approach/clients-$client_count/run-$run_id"
 client_config_path="${EXPERIMENT_CLIENT_CONFIG_PATH:-}"
 solid_initialize="cd \"$evaluation_path\" && EXPERIMENT_CONFIG_PATH=\"$client_config_path\" npx ts-node initialise-LDES.ts"; solid_cleanup="${SOLID_CLEANUP_COMMAND:-<SOLID_CLEANUP_COMMAND is required>}"; replayer_start="${REPLAYER_START_COMMAND:-<REPLAYER_START_COMMAND is required>}"
@@ -67,7 +67,7 @@ client_launch_command() {
   [[ -n "$client_ids" ]] && client_args+=" --client-ids $(shell_quote "$client_ids")"
   [[ -n "$launch_marker" ]] && client_args+=" --launch-marker $(shell_quote "$launch_marker")"
   [[ "$skip_host_monitor" == "true" ]] && client_args+=" --skip-host-monitor"
-  printf 'cd "%s" && (setsid env EXPERIMENT_CONFIG_PATH=%s EXPERIMENT_RUN_ID=%s EVALUATION_REPOSITORY_SHA=%s RSP_JS_REPOSITORY_SHA=%s SERVICE_REPOSITORY_SHA=%s npx ts-node %s %s > "%s/%s" 2>&1 & client_pid=$!; printf '\''%%s\\n'\'' "$client_pid" > "%s"; wait "$client_pid")' \
+  printf 'cd "%s" && (setsid env RSP_JS_DISABLE_LOGGING=1 EXPERIMENT_CONFIG_PATH=%s EXPERIMENT_RUN_ID=%s EVALUATION_REPOSITORY_SHA=%s RSP_JS_REPOSITORY_SHA=%s SERVICE_REPOSITORY_SHA=%s npx ts-node %s %s > "%s/%s" 2>&1 & client_pid=$!; printf '\''%%s\\n'\'' "$client_pid" > "%s"; wait "$client_pid")' \
     "$evaluation_path" "$(shell_quote "$client_config_path")" "$(shell_quote "$iteration_run_id")" \
     "$(shell_quote "$evaluation_sha")" "$(shell_quote "$rsp_js_sha")" "$(shell_quote "$service_sha")" "$(shell_quote "$launcher")" "$client_args" "$iteration_output_dir" "$launcher_log" "$pid_file"
 }
@@ -93,8 +93,8 @@ service_launch_command() {
 }
 service_monitor_command() {
   local iteration_dir="$1"
-  printf 'file=%s; pid_file=%s; previous_cpu=; previous_wall=; while test -f "$pid_file"; do pid=$(cat "$pid_file" 2>/dev/null || true); test -r "/proc/$pid/stat" || break; stat=$(cat "/proc/$pid/stat"); user=$(awk '\''{print $14}'\'' <<< "$stat"); system=$(awk '\''{print $15}'\'' <<< "$stat"); rss=$(awk '\''/^VmRSS:/ {print $2 * 1024}'\'' "/proc/$pid/status"); now=$(date +%%s%%3N); if test -n "$previous_wall"; then wall_delta=$((now - previous_wall)); cpu_util=$(awk -v c=$((user + system - previous_cpu)) -v w="$wall_delta" '\''BEGIN { if (w > 0) print 100 * c / (w * 100); else print ""}'\''); else wall_delta=""; cpu_util=""; fi; printf "%%s,%%s,%%s,%%s,%%s,%%s\\n" "$now" "$user" "$system" "$rss" "$wall_delta" "$cpu_util" >> "$file"; previous_wall=$now; previous_cpu=$((user + system)); sleep %s; done' \
-    "$(remote_path_expression "$service_results_root/$iteration_dir/service-resource.csv")" "$(remote_path_expression "$service_results_root/$iteration_dir/service.pid")" "$(read_config 'c.experiment.resourceSamplingIntervalMs')/1000"
+  printf 'file=%s; pid_file=%s; pid_timeout=%s; interval_ms=%s; interval=$(awk -v ms="$interval_ms" '\''BEGIN { print ms / 1000 }'\''); proc_root=${SERVICE_PROC_ROOT:-/proc}; start=$(date +%%s); while :; do pid=$(cat "$pid_file" 2>/dev/null || true); case "$pid" in ""|*[!0-9]*) ;; *) test -r "$proc_root/$pid/stat" && break;; esac; if (( $(date +%%s) - start >= pid_timeout )); then echo "service monitor: service.pid did not become a readable numeric PID within ${pid_timeout}s" >&2; exit 1; fi; sleep 1; done; clock_ticks=$(getconf CLK_TCK 2>/dev/null || true); case "$clock_ticks" in ""|*[!0-9]*) echo "service monitor: getconf CLK_TCK returned an invalid value" >&2; exit 1;; esac; previous_cpu=; previous_wall=; while test -f "$pid_file"; do pid=$(cat "$pid_file" 2>/dev/null || true); case "$pid" in ""|*[!0-9]*) echo "service monitor: service.pid became invalid" >&2; exit 1;; esac; test -r "$proc_root/$pid/stat" || break; stat=$(cat "$proc_root/$pid/stat"); user=$(awk '\''{print $14}'\'' <<< "$stat"); system=$(awk '\''{print $15}'\'' <<< "$stat"); rss=$(awk '\''/^VmRSS:/ {print $2 * 1024}'\'' "$proc_root/$pid/status"); now=$(date +%%s%%3N); if test -n "$previous_wall"; then wall_delta=$((now - previous_wall)); delta_jiffies=$((user + system - previous_cpu)); cpu_util=$(awk -v j="$delta_jiffies" -v t="$clock_ticks" -v w="$wall_delta" '\''BEGIN { if (w > 0 && t > 0) print 100000 * j / (t * w); else print ""}'\''); else wall_delta=""; cpu_util=""; fi; printf "%%s,%%s,%%s,%%s,%%s,%%s\\n" "$now" "$user" "$system" "$rss" "$wall_delta" "$cpu_util" >> "$file"; previous_wall=$now; previous_cpu=$((user + system)); sleep "$interval"; done' \
+    "$(remote_path_expression "$service_results_root/$iteration_dir/service-resource.csv")" "$(remote_path_expression "$service_results_root/$iteration_dir/service.pid")" "${SERVICE_PID_TIMEOUT_SECONDS:-${SERVICE_STARTUP_SECONDS:-15}}" "$(read_config 'c.experiment.resourceSamplingIntervalMs')"
 }
 heimdall_query_ready_command() {
   local initialization_csv="$1"
@@ -303,10 +303,9 @@ for iteration in $(seq 1 "$iterations"); do
   service_monitor_pid=""
   if [[ "$service_host" != "none" ]]; then
     if [[ "$approach" == "heimdall" ]]; then
-      experiment_ssh "$service_host" "export HEIMDALL_RESULTS_DIR=\"$service_iteration_dir\" HEIMDALL_RUN_ID='$run_id-$(printf '%02d' "$iteration")' HEIMDALL_APPROACH=heimdall HEIMDALL_RSP_JS_PATH=\"$rsp_js_path\" HEIMDALL_RESOURCE_INTERVAL_MS='$(read_config 'c.experiment.resourceSamplingIntervalMs')'; $heimdall_launch_command" >"$root/$iteration_dir/$approach.log" 2>&1 & service_pid=$!
+      experiment_ssh "$service_host" "export RSP_JS_DISABLE_LOGGING=1 HEIMDALL_RESULTS_DIR=\"$service_iteration_dir\" HEIMDALL_RUN_ID='$run_id-$(printf '%02d' "$iteration")' HEIMDALL_APPROACH=heimdall HEIMDALL_RSP_JS_PATH=\"$rsp_js_path\" HEIMDALL_RESOURCE_INTERVAL_MS='$(read_config 'c.experiment.resourceSamplingIntervalMs')'; $heimdall_launch_command" >"$root/$iteration_dir/$approach.log" 2>&1 & service_pid=$!
     else
       experiment_ssh "$service_host" "$(service_launch_command "iteration-$(printf '%02d' "$iteration")")" >"$root/$iteration_dir/$approach.log" 2>&1 & service_pid=$!
-      sleep 1
       experiment_ssh "$service_host" "$(service_monitor_command "iteration-$(printf '%02d' "$iteration")")" >"$root/$iteration_dir/service-monitor.log" 2>&1 & service_monitor_pid=$!
     fi
   fi
@@ -352,7 +351,8 @@ for iteration in $(seq 1 "$iterations"); do
   stop_replayer_process_group
   kill "$replayer_pid" 2>/dev/null || true; wait "$replayer_pid" 2>/dev/null || true
   cleanup
-  pids=("$client_pid" "$client_phase_b_ssh_pid"); if [[ -n "$service_pid" ]]; then pids+=("$service_pid"); fi; if [[ -n "$service_monitor_pid" ]]; then pids+=("$service_monitor_pid"); fi
+  if [[ -n "$service_monitor_pid" ]]; then wait "$service_monitor_pid" || { echo "Service resource monitor failed." >&2; exit 1; }; fi
+  pids=("$client_pid" "$client_phase_b_ssh_pid"); if [[ -n "$service_pid" ]]; then pids+=("$service_pid"); fi
   kill "${pids[@]}" 2>/dev/null || true; wait "${pids[@]}" 2>/dev/null || true
   experiment_scp_from "$client_host" "$evaluation_path/$iteration_dir" "$root/$output_root/"
   mkdir -p "$root/$iteration_dir/network"

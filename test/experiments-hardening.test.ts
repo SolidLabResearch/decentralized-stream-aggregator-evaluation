@@ -282,6 +282,41 @@ printf 'r2r_first_result\\n' >> "$root/iteration-01/window-processing.csv"
 if bash -c "$no_service_result_command"; then echo "processing.csv with r2r_first_result should fail: $no_service_result_command" >&2; exit 1; fi
 `, "remote-helper-harness"], { cwd: path.resolve(__dirname, "..") }).toString();
     assert.strictEqual(remoteHelperHarness, "", "generated remote marker helpers expand variables and execute locally");
+    const serviceMonitorStart = runnerSource.indexOf("service_monitor_command() {");
+    const serviceMonitorEnd = runnerSource.indexOf("\n}\nheimdall_query_ready_command()", serviceMonitorStart);
+    assert.ok(serviceMonitorStart >= 0 && serviceMonitorEnd > serviceMonitorStart, "service monitor command is present");
+    const serviceMonitorFunction = runnerSource.slice(serviceMonitorStart, serviceMonitorEnd + 2);
+    const serviceMonitorHarness = execFileSync("bash", ["-c", `
+set -euo pipefail
+root=$(mktemp -d)
+trap 'rm -rf "$root"' EXIT
+mkdir -p "$root/bin"
+printf '0\\n' > "$root/date-count"
+export DATE_COUNT_FILE="$root/date-count"
+printf '%s\\n' '#!/usr/bin/env bash' 'if test "$1" = +%s%3N; then count=$(cat "$DATE_COUNT_FILE"); printf "1000000%03d" "$count"; printf "%s\\n" "$((count + 100))" > "$DATE_COUNT_FILE"; else exec /bin/date "$@"; fi' > "$root/bin/date"
+chmod +x "$root/bin/date"
+export PATH="$root/bin:$PATH"
+service_results_root="$root"
+read_config() { printf '100'; }
+remote_path_expression() { printf "'%s'" "$1"; }
+${serviceMonitorFunction}
+mkdir -p "$root/iteration-01"
+mkdir -p "$root/proc/4242"
+printf '1 2 3 4 5 6 7 8 9 10 11 12 13 10 20\\n' > "$root/proc/4242/stat"
+printf 'VmRSS:\\t5 kB\\n' > "$root/proc/4242/status"
+( sleep 0.05; printf '4242\\n' > "$root/iteration-01/service.pid"; sleep 1.35; rm -f "$root/iteration-01/service.pid" ) &
+export SERVICE_PROC_ROOT="$root/proc"
+SERVICE_PID_TIMEOUT_SECONDS=3
+monitor_command=$(service_monitor_command iteration-01)
+bash -c "$monitor_command"
+test "$(wc -l < "$root/iteration-01/service-resource.csv")" -ge 3
+awk -F, -v ticks="$(getconf CLK_TCK)" 'NR == 2 { previous_cpu = $2 + $3; next } NR == 3 { expected = 100000 * (($2 + $3) - previous_cpu) / (ticks * $5); difference = $6 - expected; if (difference < 0) difference = -difference; valid = difference < 0.001; exit } END { exit !(NR >= 3 && valid) }' "$root/iteration-01/service-resource.csv"
+SERVICE_PID_TIMEOUT_SECONDS=0
+missing_pid_command=$(service_monitor_command iteration-02)
+if bash -c "$missing_pid_command" >"$root/missing.out" 2>"$root/missing.err"; then exit 1; fi
+grep -F 'service.pid did not become a readable numeric PID' "$root/missing.err" >/dev/null
+`, "service-monitor-harness"], { cwd: path.resolve(__dirname, "..") }).toString();
+    assert.strictEqual(serviceMonitorHarness, "", "generated service monitor waits for a PID, samples it, and fails on a missing PID");
     const stagedStart = runnerSource.indexOf('  if [[ "$client_arrival_mode" == "staged-reuse" ]]', runnerSource.indexOf('client_phase_b_ssh_pid=""'));
     const stagedBranch = runnerSource.slice(stagedStart, runnerSource.indexOf("\n  else\n", stagedStart));
     const sourceOrder = (text: string, token: string): number => { const index = text.indexOf(token); assert.ok(index >= 0, `staged runner contains ${token}`); return index; };
@@ -298,6 +333,8 @@ if bash -c "$no_service_result_command"; then echo "processing.csv with r2r_firs
     assert.match(runnerSource, /local override_name\n  override_name="EXPERIMENT_NETWORK_INTERFACE_\$\(printf '%s' "\$role" \| tr '\[:lower:\]' '\[:upper:\]'\)"\n  local override="\$\{!override_name:-\}"/);
     const clientLaunchFunction = runnerSource.slice(runnerSource.indexOf("client_launch_command() {"), runnerSource.indexOf("\n}\n\nreplayer_runtime_root"));
     const serviceLaunchFunction = runnerSource.slice(runnerSource.indexOf("service_launch_command() {"), runnerSource.indexOf("\n}\nservice_monitor_command"));
+    assert.match(clientLaunchFunction, /RSP_JS_DISABLE_LOGGING=1/);
+    assert.match(runnerSource, /export RSP_JS_DISABLE_LOGGING=1 HEIMDALL_RESULTS_DIR=/);
     assert.doesNotMatch(clientLaunchFunction, /\\\$/);
     assert.doesNotMatch(serviceLaunchFunction, /\\\$/);
     const simultaneousStart = runnerSource.indexOf("\n  else\n", stagedStart);
@@ -316,6 +353,6 @@ if bash -c "$no_service_result_command"; then echo "processing.csv with r2r_firs
     const stagedDirectory = fs.mkdtempSync(path.join(os.tmpdir(), "heimdall-staged-")); writeHeimdallFixture(stagedDirectory, 1, undefined, true); assert.deepStrictEqual(validateMultiClientRepetition(stagedDirectory, "heimdall", 2), { valid: true, errors: [] }, "staged cold/reuse evidence passes"); fs.rmSync(stagedDirectory, { recursive: true, force: true });
     const preReplayResultDirectory = fs.mkdtempSync(path.join(os.tmpdir(), "heimdall-staged-pre-replay-result-")); writeHeimdallFixture(preReplayResultDirectory, 1, undefined, true); fs.writeFileSync(path.join(preReplayResultDirectory, "client-1-first-result.json"), JSON.stringify({ client_role: "reuse", result_epoch_ms: 6, result_monotonic_ns: 2 })); assert.ok(!validateMultiClientRepetition(preReplayResultDirectory, "heimdall", 2).valid, "pre-replay first results are rejected"); fs.rmSync(preReplayResultDirectory, { recursive: true, force: true });
     const stagedSingleDirectory = fs.mkdtempSync(path.join(os.tmpdir(), "heimdall-staged-single-")); writeHeimdallFixture(stagedSingleDirectory, 1, undefined, true, 1); assert.deepStrictEqual(validateMultiClientRepetition(stagedSingleDirectory, "heimdall", 1), { valid: true, errors: [] }, "staged N=1 creation/no-reuse evidence passes"); fs.rmSync(stagedSingleDirectory, { recursive: true, force: true });
-    const notificationDirectory = fs.mkdtempSync(path.join(os.tmpdir(), "notification-staged-")); writeNotificationStagedFixture(notificationDirectory); assert.deepStrictEqual(validateMultiClientRepetition(notificationDirectory, "notification-aggregator", 2), { valid: true, errors: [] }, "staged notification join evidence passes"); fs.rmSync(notificationDirectory, { recursive: true, force: true });
+    const notificationDirectory = fs.mkdtempSync(path.join(os.tmpdir(), "notification-staged-")); writeNotificationStagedFixture(notificationDirectory); assert.deepStrictEqual(validateMultiClientRepetition(notificationDirectory, "notification-aggregator", 2), { valid: true, errors: [] }, "staged notification join evidence passes"); fs.writeFileSync(path.join(notificationDirectory, "service-resource.csv"), "timestamp\\n"); assert.ok(!validateMultiClientRepetition(notificationDirectory, "notification-aggregator", 2).valid, "Notification Aggregator header-only service resource evidence fails"); fs.rmSync(notificationDirectory, { recursive: true, force: true });
 }
 main().then(() => console.log("experiment hardening tests passed"));

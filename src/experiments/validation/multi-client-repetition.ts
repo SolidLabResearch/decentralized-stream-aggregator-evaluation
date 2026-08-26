@@ -93,6 +93,10 @@ export function validateMultiClientRepetition(iterationDirectory: string, approa
     const hostResource = path.join(iterationDirectory, "client-host-resource.csv"); requireFile(hostResource, errors);
     if (fs.existsSync(hostResource)) { const hostRows = rows(hostResource); const header = fs.readFileSync(hostResource, "utf8").split(/\r?\n/, 1)[0].split(","); for (const column of ["cpu_user", "cpu_nice", "cpu_system", "cpu_idle", "cpu_iowait", "cpu_irq", "cpu_softirq", "cpu_steal"]) if (!header.includes(column)) errors.push(`missing raw host CPU column ${column}`); if (!hostRows.length) errors.push(`${hostResource} has no samples`); }
     if (approach === "heimdall" || approach === "notification-aggregator") requireFile(path.join(iterationDirectory, "service-resource.csv"), errors);
+    if (approach === "notification-aggregator") {
+        const serviceResource = path.join(iterationDirectory, "service-resource.csv");
+        if (fs.existsSync(serviceResource) && rows(serviceResource).length === 0) errors.push(`${serviceResource} has no service resource samples`);
+    }
     if (approach === "heimdall") {
         const metadataPath = path.join(iterationDirectory, "metadata.json");
         const initialization = path.join(iterationDirectory, "service", "initialization.csv"); const service = path.join(iterationDirectory, "service", "window-processing.csv");
