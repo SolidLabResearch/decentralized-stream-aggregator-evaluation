@@ -105,6 +105,17 @@ export function validateMultiClientRepetition(iterationDirectory: string, approa
     const hostResource = path.join(iterationDirectory, "client-host-resource.csv"); requireFile(hostResource, errors);
     if (fs.existsSync(hostResource)) { const hostRows = rows(hostResource); const header = fs.readFileSync(hostResource, "utf8").split(/\r?\n/, 1)[0].split(","); for (const column of ["cpu_user", "cpu_nice", "cpu_system", "cpu_idle", "cpu_iowait", "cpu_irq", "cpu_softirq", "cpu_steal"]) if (!header.includes(column)) errors.push(`missing raw host CPU column ${column}`); if (!hostRows.length) errors.push(`${hostResource} has no samples`); }
     if (approach === "heimdall" || approach === "notification-aggregator") requireFile(path.join(iterationDirectory, "service-resource.csv"), errors);
+    if (approach === "heimdall") {
+        const serviceResource = path.join(iterationDirectory, "service-resource.csv");
+        if (fs.existsSync(serviceResource)) {
+            const serviceRows = rows(serviceResource);
+            const serviceHeader = fs.readFileSync(serviceResource, "utf8").split(/\r?\n/, 1)[0].split(",");
+            for (const column of ["timestamp_epoch_ms", "cpu_user_us", "cpu_system_us", "rss_bytes", "cpu_user_delta_us", "cpu_system_delta_us", "wall_delta_us", "cpu_utilization_percent"]) if (!serviceHeader.includes(column)) errors.push(`missing ${column} in ${serviceResource}`);
+            if (serviceRows.length < 2) errors.push(`${serviceResource} requires at least two resource samples`);
+            if (serviceRows.length && !serviceRows.some((row) => finiteNonNegative(row.rss_bytes))) errors.push(`${serviceResource} has no usable RSS sample`);
+            if (serviceRows.length && !serviceRows.some((row) => finiteNonNegative(row.cpu_utilization_percent))) errors.push(`${serviceResource} has no usable CPU sample`);
+        }
+    }
     if (approach === "notification-aggregator") {
         const serviceResource = path.join(iterationDirectory, "service-resource.csv");
         if (fs.existsSync(serviceResource)) {

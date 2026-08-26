@@ -18,7 +18,7 @@ SSH_USER="${EXPERIMENT_SSH_USER:-$(read_config 'c.ssh.user')}"; SSH_BASTION="${E
 SSH_IDENTITY_FILE="${EXPERIMENT_SSH_IDENTITY_FILE:-$(read_config 'c.ssh.identityFile === null ? "" : c.ssh.identityFile')}"; SSH_CONNECT_TIMEOUT_SECONDS="${EXPERIMENT_SSH_CONNECT_TIMEOUT_SECONDS:-$(read_config 'c.ssh.connectTimeoutSeconds')}"
 experiment_ssh_args
 evaluation_path="$(experiment_remote_path "$(read_config 'c.remotePaths.evaluation')")"; heimdall_path="$(experiment_remote_path "$(read_config 'c.remotePaths.heimdall')")"; notification_aggregator_path="$(experiment_remote_path "$(read_config 'c.remotePaths.notificationAggregator')")"; rsp_js_path="$(experiment_remote_path "$(read_config 'c.remotePaths.rspJs')")"; replayer_path="$(experiment_remote_path "$(read_config 'c.remotePaths.replayer')")"
-evaluation_sha="${EVALUATION_REPOSITORY_SHA_EXPECTED:-$(git rev-parse HEAD)}"; heimdall_sha="${HEIMDALL_REPOSITORY_SHA_EXPECTED:-aa4a674ca03c7eb5a0e0e626ea5a8b3d190a9fef}"; notification_aggregator_sha="${NOTIFICATION_AGGREGATOR_REPOSITORY_SHA_EXPECTED:-7623967531a4f8a9558c7a8fb91c4ab428199ef5}"; rsp_js_sha="${RSP_JS_SHA_EXPECTED:-92a065c2db975f1ec06352521cd49be9e665b33d}"; replayer_sha="${REPLAYER_REPOSITORY_SHA_EXPECTED:-a98ec1cba14f4437bb0bbefd915fb07e79a454fe}"
+evaluation_sha="${EVALUATION_REPOSITORY_SHA_EXPECTED:-$(git rev-parse HEAD)}"; heimdall_sha="${HEIMDALL_REPOSITORY_SHA_EXPECTED:-82ba8132dddd70e6b9fa8cf57bbf62b14cb44d02}"; notification_aggregator_sha="${NOTIFICATION_AGGREGATOR_REPOSITORY_SHA_EXPECTED:-7623967531a4f8a9558c7a8fb91c4ab428199ef5}"; rsp_js_sha="${RSP_JS_SHA_EXPECTED:-92a065c2db975f1ec06352521cd49be9e665b33d}"; replayer_sha="${REPLAYER_REPOSITORY_SHA_EXPECTED:-a98ec1cba14f4437bb0bbefd915fb07e79a454fe}"
 launcher="src/experiments/clients/$approach/launcher.ts"; run_id="${EXPERIMENT_RUN_ID:-$(date -u +%Y%m%dT%H%M%SZ)}"; output_root="results/4hz/$approach/clients-$client_count/run-$run_id"
 client_config_path="${EXPERIMENT_CLIENT_CONFIG_PATH:-}"
 solid_initialize="cd \"$evaluation_path\" && EXPERIMENT_CONFIG_PATH=\"$client_config_path\" npx ts-node initialise-LDES.ts"; solid_cleanup="${SOLID_CLEANUP_COMMAND:-<SOLID_CLEANUP_COMMAND is required>}"; replayer_start="${REPLAYER_START_COMMAND:-<REPLAYER_START_COMMAND is required>}"
@@ -86,6 +86,10 @@ csv_operation_count_command() {
     "$(remote_path_expression "$csv_path")" "$operation" "$(remote_path_expression "$csv_path")"
 }
 service_resource_header='timestamp,cpu_user_jiffies,cpu_system_jiffies,rss_bytes,wall_delta_ms,cpu_utilization_percent'
+heimdall_rsp_js_preflight_command() {
+  printf 'expected_path=$(cd %s && pwd -P) || { echo "Heimdall RSP-JS preflight: expected checkout is unavailable" >&2; exit 1; }; test "$(git -C "$expected_path" rev-parse HEAD)" = %s || { echo "Heimdall RSP-JS preflight: expected checkout SHA mismatch" >&2; exit 1; }; resolved=$(cd %s && node -e '\''const fs = require("fs"); process.stdout.write(fs.realpathSync(require.resolve("rsp-js")));'\'') || { echo "Heimdall RSP-JS preflight: unable to resolve rsp-js" >&2; exit 1; }; case "$resolved" in "$expected_path"/*) ;; *) echo "Heimdall RSP-JS preflight: resolved rsp-js is outside the frozen checkout: $resolved" >&2; exit 1;; esac; logger="$expected_path/dist/util/Logger.js"; test -f "$logger" && grep -Fq "RSP_JS_DISABLE_LOGGING" "$logger" || { echo "Heimdall RSP-JS preflight: resolved Logger lacks benchmark logging-disable support" >&2; exit 1; }' \
+    "$(remote_path_expression "$rsp_js_path")" "$(shell_quote "$rsp_js_sha")" "$(remote_path_expression "$heimdall_path")"
+}
 service_launch_command() {
   local iteration_dir="$1"
   printf 'mkdir -p %s; printf "%s\\n" > %s; setsid bash -c %s > %s/service.log 2>&1 & service_pgid=$!; printf "%%s\\n" "$service_pgid" > %s/service.pgid; service_pid=""; for attempt in $(seq 1 %s); do descendants="$service_pgid"; while test -n "$descendants"; do next=""; for candidate in $descendants; do if test "$(ps -o comm= -p "$candidate" 2>/dev/null | tr -d " ")" = node; then service_pid="$candidate"; break 3; fi; next="$next $(pgrep -P "$candidate" 2>/dev/null || true)"; done; descendants="$next"; done; sleep 1; done; if test -z "$service_pid"; then echo "service launch: Node PID was not discovered within %s seconds" >&2; kill -TERM -- "-$service_pgid" 2>/dev/null || true; exit 1; fi; printf "%%s\\n" "$service_pid" > %s/service.pid; wait "$service_pgid"' \
@@ -270,6 +274,7 @@ if [[ "$mode" == "--preflight" ]]; then
   remote_check "CLIENT reachable/evaluation-path/SHA/clean/node" "$client_host" "test -d \"$evaluation_path\" && test \"\$(git -C \"$evaluation_path\" rev-parse HEAD)\" = \"$evaluation_sha\" && test -z \"\$(git -C \"$evaluation_path\" status --porcelain -- src/experiments package.json package-lock.json tsconfig.experiments.json)\" && command -v node && node --version" || failures=1
   if [[ "$service_host" != "none" ]]; then
     remote_check "SERVICE reachable/repository/SHA/clean/node" "$service_host" "test -d \"$service_repository_path\" && test \"\$(git -C \"$service_repository_path\" rev-parse HEAD)\" = \"$service_sha\" && test -z \"\$(git -C \"$service_repository_path\" status --porcelain -- src package.json package-lock.json tsconfig.json)\" && command -v node && node --version" || failures=1
+    if [[ "$approach" == "heimdall" ]]; then remote_check "HEIMDALL resolved frozen RSP-JS" "$service_host" "$(heimdall_rsp_js_preflight_command)" || failures=1; fi
   fi
   print_plan
   exit "$failures"
