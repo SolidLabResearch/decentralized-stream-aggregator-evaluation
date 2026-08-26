@@ -80,6 +80,10 @@ async function main(): Promise<void> {
     const networkEnd = runnerSource.indexOf("\ncapture_network_snapshots()", networkStart);
     assert.ok(networkStart >= 0 && networkEnd > networkStart, "network_snapshot_command function is present");
     const networkFunction = runnerSource.slice(networkStart, networkEnd);
+    const networkInterfaceStart = runnerSource.indexOf("network_interface_command() {");
+    const networkInterfaceEnd = runnerSource.indexOf("\n}\nnetwork_snapshot_command()", networkInterfaceStart);
+    assert.ok(networkInterfaceStart >= 0 && networkInterfaceEnd > networkInterfaceStart, "network_interface_command function is present");
+    const networkInterfaceFunction = runnerSource.slice(networkInterfaceStart, networkInterfaceEnd + 2);
     const snapshotHarness = execFileSync("bash", ["-c", `
 set -euo pipefail
 root=$(mktemp -d)
@@ -93,8 +97,50 @@ service_host=none
 network_snapshot_base=.evaluation-network
 run_id=local-test
 shell_quote() { printf "'%s'" "$1"; }
-EXPERIMENT_NETWORK_INTERFACE_SOLID=eth-test
+stub_dir="$root/stubs"
+mkdir "$stub_dir"
+ip_calls="$root/ip-calls"
+getent_calls="$root/getent-calls"
+cat > "$stub_dir/ip" <<'EOF'
+#!/usr/bin/env bash
+printf '%s\\n' "$*" >> "$IP_CALLS"
+case "$3" in
+  route-host.example) exit 1 ;;
+  198.51.100.10|198.51.100.11) printf '%s dev eth-test src 192.0.2.1\\n' "$3" ;;
+  *) exit 1 ;;
+esac
+EOF
+cat > "$stub_dir/getent" <<'EOF'
+#!/usr/bin/env bash
+printf '%s\\n' "$*" >> "$GETENT_CALLS"
+case "$2" in route-host.example) printf '198.51.100.10 STREAM route-host.example\\n' ;; unresolved-host.example) ;; *) exit 1 ;; esac
+EOF
+chmod +x "$stub_dir/ip" "$stub_dir/getent"
+PATH="$stub_dir:$PATH"
+export PATH IP_CALLS="$ip_calls" GETENT_CALLS="$getent_calls"
+${networkInterfaceFunction}
 ${networkFunction}
+network_interface=$(network_interface_command)
+resolve_interface() { target="$1" override="$2"; eval "$network_interface"; printf '%s' "$interface"; }
+test "$(resolve_interface route-host.example '')" = eth-test
+test "$(sed -n '1p' "$ip_calls")" = "route get route-host.example"
+test "$(sed -n '2p' "$ip_calls")" = "route get 198.51.100.10"
+test "$(cat "$getent_calls")" = "ahostsv4 route-host.example"
+: > "$ip_calls"; : > "$getent_calls"
+test "$(resolve_interface 198.51.100.11 '')" = eth-test
+test "$(cat "$ip_calls")" = "route get 198.51.100.11
+route get 198.51.100.11"
+test ! -s "$getent_calls"
+: > "$ip_calls"; : > "$getent_calls"
+if (resolve_interface unresolved-host.example '') >"$root/unresolved.out" 2>&1; then exit 1; fi
+grep -F "network snapshot: unable to resolve unresolved-host.example" "$root/unresolved.out" >/dev/null
+test "$(cat "$ip_calls")" = "route get unresolved-host.example"
+test "$(cat "$getent_calls")" = "ahostsv4 unresolved-host.example"
+: > "$ip_calls"; : > "$getent_calls"
+test "$(resolve_interface ignored-host.example override-test)" = override-test
+test ! -s "$ip_calls"
+test ! -s "$getent_calls"
+EXPERIMENT_NETWORK_INTERFACE_SOLID=eth-test
 network_command=$(network_snapshot_command solid target start iteration-01)
 case "$network_command" in *"override='eth-test'"*) ;; *) exit 1 ;; esac
 network_snapshot_command() { printf ':'; }
