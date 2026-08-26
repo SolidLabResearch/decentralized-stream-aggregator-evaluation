@@ -355,8 +355,7 @@ service_results_root="$root"; service_resource_header=x; service_start_exec_quot
 ${serviceLaunchFunction}
 SERVICE_NODE_DISCOVERY_ATTEMPTS=1; NODE_DISCOVERY_MODE=leader; export NODE_DISCOVERY_MODE; leader_command=$(service_launch_command iteration-leader); bash -c "$leader_command" >/dev/null 2>&1; test -s "$root/iteration-leader/service.pid"
 NODE_DISCOVERY_MODE=child; export NODE_DISCOVERY_MODE; child_command=$(service_launch_command iteration-child); bash -c "$child_command" >/dev/null 2>&1; test "$(cat "$root/iteration-child/service.pid")" = 4242
-NODE_DISCOVERY_MODE=none; export NODE_DISCOVERY_MODE; missing_command=$(service_launch_command iteration-missing); if bash -c "$missing_command" >"$root/missing.out" 2>"$root/missing.err"; then exit 1; fi; grep -F 'service launch: Node PID was not discovered within 1 seconds' "$root/missing.err" >/dev/null`, "service-launch-harness"], { cwd: path.resolve(__dirname, "..") }).toString();
-    assert.strictEqual(serviceLaunchHarness, "", "service PID discovery accepts a Node leader or descendant and fails boundedly when absent");
+NODE_DISCOVERY_MODE=none; export NODE_DISCOVERY_MODE; missing_command=$(service_launch_command iteration-missing); if bash -c "$missing_command" >"$root/missing.out" 2>"$root/missing.err"; then exit 1; fi; grep -F 'service launch: Node PID was not discovered within 1 seconds' "$root/missing.err" >/dev/null`, "service-launch-harness"], { cwd: path.resolve(__dirname, ".."), stdio: "ignore" });
     assert.match(clientLaunchFunction, /RSP_JS_DISABLE_LOGGING=1/);
     assert.match(runnerSource, /export RSP_JS_DISABLE_LOGGING=1 HEIMDALL_RESULTS_DIR=/);
     assert.doesNotMatch(clientLaunchFunction, /\\\$/);
