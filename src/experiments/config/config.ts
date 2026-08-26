@@ -2,7 +2,7 @@ import * as fs from "fs";
 import * as path from "path";
 
 export interface ExperimentConfig {
-    experiment: { frequencyHz: number; clientCount: number; iterations: number; durationSeconds: number; resourceSamplingIntervalMs: number };
+    experiment: { frequencyHz: number; clientCount: number; iterations: number; durationSeconds: number; resourceSamplingIntervalMs: number; clientArrivalMode: "simultaneous" | "staged-reuse" };
     ssh: { user: string; bastion: string | null; identityFile: string | null; connectTimeoutSeconds: number };
     hosts: { replayer: string; solidPod: string; client: string; heimdall: string; notificationAggregator: string };
     remotePaths: { evaluation: string; heimdall: string; notificationAggregator: string; rspJs: string; replayer: string };
@@ -28,6 +28,10 @@ export function validateExperimentConfig(config: ExperimentConfig): ExperimentCo
     if (!config || typeof config !== "object") throw new Error("Invalid experiment configuration: expected an object.");
     if (!config.experiment || !config.ssh || !config.hosts || !config.remotePaths || !config.urls || !config.streams) throw new Error("Invalid experiment configuration: missing a required section.");
     if (config.experiment.frequencyHz !== 4) throw new Error(`Unsupported frequencyHz ${config.experiment.frequencyHz}. Only 4 Hz is supported by this framework.`);
+    if (config.experiment.clientArrivalMode === undefined) config.experiment.clientArrivalMode = "simultaneous";
+    if (config.experiment.clientArrivalMode !== "simultaneous" && config.experiment.clientArrivalMode !== "staged-reuse") {
+        throw new Error(`Invalid experiment configuration: clientArrivalMode must be "simultaneous" or "staged-reuse".`);
+    }
     if (!Number.isInteger(config.experiment.clientCount) || config.experiment.clientCount < 1 || config.experiment.clientCount > 30) {
         throw new Error("Invalid experiment configuration: clientCount must be an integer from 1 through 30.");
     }

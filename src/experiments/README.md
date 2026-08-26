@@ -10,6 +10,11 @@ The three supported approaches are `heimdall`, `notification-aggregator`, and
 frequency, client counts outside 1--30, and non-positive iteration/duration
 values.
 
+`experiment.clientArrivalMode` defaults to `simultaneous`, preserving the
+original benchmark. Set it to `staged-reuse` with Heimdall or Notification
+Aggregator to launch client 0, wait for its genuine first result, and then launch
+clients 1..N-1 together.
+
 Set `experiment.clientCount` to `2` for the smoke test, or to a final matrix
 count of `1`, `5`, `10`, `20`, or `30`. Each value launches that many
 independently forked client processes on the same client host. The committed defaults are 4 Hz, one client, 35 iterations, and
@@ -35,6 +40,21 @@ without-aggregator client starts after all three successful Solid subscription
 establishment responses. The first-result marker is written only when that same
 client observes its first result. These boundaries are never computed from
 cross-machine clocks and are distinct from canonical `r2r_first_result`.
+
+In `staged-reuse`, client 0 reports `cold_registration_to_first_result`. Heimdall
+late clients report `reuse_registration_to_first_result`; Notification
+Aggregator late clients report `join_registration_to_first_result`. The client
+records the architecture-specific registration boundary and first-result
+monotonic timestamps, result payload hash, and result/window identifier when
+present. The Notification Aggregator registration boundary is the first
+outbound stream-subscription request; JSON/control messages are excluded from
+staged first-result boundaries.
+
+The architectures retain different meanings: Heimdall validates one shared RSP
+query creation, N-1 query reuse registrations, and three upstream subscriptions;
+Notification Aggregator validates three unique successful upstream subscriptions
+from its existing service log and one local RSP result lifecycle per client. Its
+joining clients do not reuse the local RSP query.
 
 Run the four-machine orchestration from the repository root:
 

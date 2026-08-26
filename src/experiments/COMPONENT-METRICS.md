@@ -44,4 +44,12 @@ The deployed Heimdall and Notifications Aggregator services must emit these
 acknowledgements before a smoke or final run. The evaluator does not infer
 readiness from a client send, a remote timestamp, or the first result itself.
 
+The explicit `staged-reuse` mode is an additive arrival schedule. Heimdall uses
+`cold`/`reuse` roles and shared-query semantics; Notification Aggregator uses
+`cold`/`join` roles and shared-upstream/independent-local-RSP semantics. All
+latency rows use the registration-start/first-subscription to first-genuine-result monotonic interval.
+Result payload hashes and available window/result identifiers are retained with
+the client rows, while query-ready, subscription-ready, status, and other typed
+WebSocket control messages are excluded from staged first-result boundaries.
+
 Out-of-order records are one logical event, never one RDF quad: `out_of_order_event` stores `event_id`, `lateness_ms`, `within_bound`, and `max_out_of_orderness_ms`. A late event is within the 30,000 ms bound when `lateness_ms <= 30000`.

@@ -4,7 +4,8 @@
     "clientCount": 1,
     "iterations": 35,
     "durationSeconds": 720,
-    "resourceSamplingIntervalMs": 500
+    "resourceSamplingIntervalMs": 500,
+    "clientArrivalMode": "simultaneous"
   },
   "ssh": {
     "user": "kbisenug",

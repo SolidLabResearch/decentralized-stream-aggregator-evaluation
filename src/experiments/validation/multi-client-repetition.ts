@@ -19,6 +19,32 @@ function heimdallReuseKey(query: string): string { return crypto.createHash("md5
 
 export function validateMultiClientRepetition(iterationDirectory: string, approach: string, clientCount: number): Validation {
     const errors: string[] = [];
+    const metadataPath = path.join(iterationDirectory, "metadata.json");
+    let stagedArrival = false;
+    let stagedReuse = false;
+    if (fs.existsSync(metadataPath)) {
+        try {
+            const arrivalMode = JSON.parse(fs.readFileSync(metadataPath, "utf8")).clientArrivalMode;
+            if (arrivalMode === "staged-reuse" && approach !== "heimdall" && approach !== "notification-aggregator") errors.push("staged-reuse is supported only for Heimdall or Notification Aggregator");
+            stagedArrival = arrivalMode === "staged-reuse";
+            stagedReuse = approach === "heimdall" && stagedArrival;
+        }
+        catch { /* The existing metadata validation below reports malformed metadata. */ }
+    }
+    if (stagedArrival) {
+        for (const marker of ["staged-client-0-ready.json", "staged-client-0-first-genuine-result.json", "staged-late-clients-launched.json", "staged-late-clients-phase.json", "staged-late-clients-ready.json", "staged-all-late-clients-completed.json"]) {
+            if (clientCount > 1 || !marker.includes("late-clients")) requireFile(path.join(iterationDirectory, marker), errors);
+        }
+        if (clientCount > 1 && fs.existsSync(path.join(iterationDirectory, "staged-client-0-first-genuine-result.json")) && fs.existsSync(path.join(iterationDirectory, "staged-late-clients-launched.json"))) {
+            try {
+                const firstPhase = JSON.parse(fs.readFileSync(path.join(iterationDirectory, "staged-client-0-first-genuine-result.json"), "utf8"));
+                const lateLaunch = JSON.parse(fs.readFileSync(path.join(iterationDirectory, "staged-late-clients-launched.json"), "utf8"));
+                const expectedLateIds = Array.from({ length: clientCount - 1 }, (_, index) => index + 1);
+                if (JSON.stringify(lateLaunch.client_ids) !== JSON.stringify(expectedLateIds)) errors.push("staged late-client launch did not contain exactly clients 1..N-1");
+                if (Number(lateLaunch.launched_epoch_ms) <= Number(firstPhase.epoch_ms)) errors.push("late clients were launched before client 0's first genuine result");
+            } catch { errors.push("invalid staged phase ordering/launch marker"); }
+        }
+    }
     for (let client = 0; client < clientCount; client += 1) {
         const prefix = path.join(iterationDirectory, `client-${client}`);
         const operations = `${prefix}-operations.csv`;
@@ -26,12 +52,26 @@ export function validateMultiClientRepetition(iterationDirectory: string, approa
         const results = `${prefix}-results.csv`;
         const ooo = `${prefix}-out-of-order.csv`;
         [operations, resource, results, ooo, `${prefix}-ready.json`, `${prefix}-first-result.ready`].forEach((file) => requireFile(file, errors));
+        if (stagedArrival) [`${prefix}-registration.json`, `${prefix}-first-result.json`].forEach((file) => requireFile(file, errors));
         if (fs.existsSync(results) && rows(results).length === 0) errors.push(`${results} has no result observation`);
         if (!fs.existsSync(operations)) continue;
         const operationRows = rows(operations);
         if (approach === "heimdall" && operationRows.some(row => row.client_id !== String(client) || row.query_id !== CANONICAL_HEIMDALL_QUERY_SHA256)) errors.push(`non-canonical Heimdall client provenance for client ${client}`);
-        const first = operationRows.filter((row) => row.operation === "registration_to_first_result");
-        if (first.length !== 1 || first.some((row) => row.client_id !== String(client) || !Number.isFinite(Number(row.duration_ms)) || Number(row.duration_ms) < 0 || BigInt(row.end_monotonic_ns || "-1") < BigInt(row.start_monotonic_ns || "0"))) errors.push(`invalid registration_to_first_result for client ${client}`);
+        const expectedOperation = stagedReuse ? (client === 0 ? "cold_registration_to_first_result" : "reuse_registration_to_first_result") : stagedArrival ? (client === 0 ? "cold_registration_to_first_result" : "join_registration_to_first_result") : "registration_to_first_result";
+        const first = operationRows.filter((row) => row.operation === expectedOperation);
+        if (first.length !== 1 || first.some((row) => row.client_id !== String(client) || (stagedArrival && row.client_role !== (client === 0 ? "cold" : stagedReuse ? "reuse" : "join")) || !Number.isFinite(Number(row.duration_ms)) || Number(row.duration_ms) < 0 || BigInt(row.end_monotonic_ns || "-1") < BigInt(row.start_monotonic_ns || "0"))) errors.push(`invalid ${expectedOperation} for client ${client}`);
+        if (stagedArrival && fs.existsSync(`${prefix}-registration.json`) && fs.existsSync(`${prefix}-first-result.json`)) {
+            try {
+                const registration = JSON.parse(fs.readFileSync(`${prefix}-registration.json`, "utf8"));
+                const result = JSON.parse(fs.readFileSync(`${prefix}-first-result.json`, "utf8"));
+                const expectedRole = client === 0 ? "cold" : stagedReuse ? "reuse" : "join";
+                if (result.client_role !== expectedRole || BigInt(result.result_monotonic_ns || "-1") < BigInt(registration.registration_monotonic_ns || "0")) errors.push(`client ${client} first result is not proven post-registration`);
+                const resultRows = rows(results).filter((row) => row.result_monotonic_ns);
+                if (!resultRows.length) errors.push(`client ${client} has no monotonic staged result observation`);
+                if (resultRows.some((row) => !row.result_id)) errors.push(`client ${client} has a staged result without a result identifier`);
+                if (resultRows.some((row) => BigInt(row.result_monotonic_ns) < BigInt(registration.registration_monotonic_ns || "0"))) errors.push(`client ${client} has a result predating registration`);
+            } catch { errors.push(`invalid staged registration/result identity for client ${client}`); }
+        }
         if ((approach === "without-aggregator" || approach === "notification-aggregator") && !hasOperation(operations, "stream_discovery")) errors.push(`missing stream discovery for client ${client}`);
         if (approach !== "heimdall" && !hasOperation(operations, "stream_subscription")) errors.push(`missing stream subscription for client ${client}`);
         if (approach !== "heimdall" && !hasOperation(operations, "parsing_timestamp_extraction")) errors.push(`missing parsing/timestamp extraction for client ${client}`);
@@ -54,11 +94,25 @@ export function validateMultiClientRepetition(iterationDirectory: string, approa
             const serviceRows = rows(initialization).filter(row => row.query_id === reuseKey);
             const created = serviceRows.filter(row => row.operation === "shared_query_instance_created"); const reused = serviceRows.filter(row => row.operation === "shared_query_instance_reused");
             if (created.length !== 1) errors.push(`expected exactly one shared Heimdall query instance for ${reuseKey}, found ${created.length}`);
-            if (reused.length < clientCount - 1) errors.push(`expected at least ${clientCount - 1} Heimdall reuse attachment events, found ${reused.length}`);
+            if (stagedReuse ? reused.length !== clientCount - 1 : reused.length < clientCount - 1) errors.push(`expected ${stagedReuse ? "exactly" : "at least"} ${clientCount - 1} Heimdall reuse attachment events, found ${reused.length}`);
             const clients = new Set([...created, ...reused].map(row => row.client_id));
             for (let client = 0; client < clientCount; client += 1) if (!clients.has(String(client))) errors.push(`Heimdall client ${client} was not associated with the shared query`);
+            if (stagedReuse && serviceRows.filter(row => row.operation === "stream_subscription").length !== 3) errors.push(`expected exactly three shared Heimdall upstream stream subscriptions, found ${serviceRows.filter(row => row.operation === "stream_subscription").length}`);
         }
         if (fs.existsSync(service) && rows(service).filter(row => row.operation === "r2r_first_result" && /^\/w1:/.test(row.window_id || "")).length !== 1) errors.push("Heimdall must have exactly one shared service-side /w1: r2r_first_result");
+    }
+    if (approach === "notification-aggregator" && stagedArrival) {
+        const serviceLog = path.join(iterationDirectory, "service", "service.log");
+        requireFile(serviceLog, errors);
+        if (fs.existsSync(serviceLog)) {
+            const logLines = fs.readFileSync(serviceLog, "utf8").split(/\r?\n/);
+            if (logLines.filter((line) => line.includes("Server listening on port")).length !== 1) errors.push("Notification Aggregator staged run did not prove exactly one service instance");
+            const marker = "Subscribed to the inbox container location:";
+            const upstreamLocations = logLines.filter((line) => line.includes(marker)).map((line) => line.slice(line.indexOf(marker) + marker.length).trim()).filter(Boolean);
+            if (upstreamLocations.length !== 3 || new Set(upstreamLocations).size !== 3) errors.push(`Notification Aggregator expected exactly three unique successful upstream subscriptions, found ${upstreamLocations.length}`);
+        }
+        const localProcessors = Array.from({ length: clientCount }, (_, client) => path.join(iterationDirectory, `client-${client}-operations.csv`)).filter((file) => fs.existsSync(file) && hasOperation(file, "r2r_first_result")).length;
+        if (localProcessors !== clientCount) errors.push(`Notification Aggregator expected one local RSP result lifecycle per client (${clientCount}), found ${localProcessors}`);
     }
     const metadata = path.join(iterationDirectory, "metadata.json");
     requireFile(metadata, errors);
