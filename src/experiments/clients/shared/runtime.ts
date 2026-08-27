@@ -54,6 +54,9 @@ export function launchConfiguredClients(approach: Approach, clientModule: string
     const clientIndices = resolveClientIndices(config.experiment.clientCount);
     const launchMarker = optionValue("--launch-marker");
     const skipHostMonitor = process.argv.includes("--skip-host-monitor");
+    const saturationAttemptId = optionValue("--saturation-attempt-id");
+    const saturationCheckout = optionValue("--saturation-evaluation-checkout");
+    if ((saturationAttemptId === undefined) !== (saturationCheckout === undefined)) throw new Error("Saturation client ownership markers must be supplied together.");
     const outputDirectory = path.resolve(requestedOutput || path.join("results", "4hz", approach, `clients-${config.experiment.clientCount}`, `iteration-${iteration}-${Date.now()}`));
     fs.mkdirSync(outputDirectory, { recursive: true });
     const instance = workloadInstance(config);
@@ -93,7 +96,7 @@ export function launchConfiguredClients(approach: Approach, clientModule: string
     const hostMonitor = skipHostMonitor ? undefined : monitorHostResources(path.join(outputDirectory, "client-host-resource.csv"), config.experiment.resourceSamplingIntervalMs);
     const children: ChildProcess[] = [];
     for (const clientIndex of clientIndices) {
-        const child = fork(clientModule, [], { env: { ...process.env, EXPERIMENT_CLIENT_INDEX: String(clientIndex), EXPERIMENT_OUTPUT_DIRECTORY: outputDirectory, EXPERIMENT_RUN_ID: process.env.EXPERIMENT_RUN_ID || path.basename(outputDirectory) } });
+        const child = fork(clientModule, saturationAttemptId ? [`--saturation-attempt-id=${saturationAttemptId}`, `--saturation-evaluation-checkout=${saturationCheckout}`] : [], { env: { ...process.env, EXPERIMENT_CLIENT_INDEX: String(clientIndex), EXPERIMENT_OUTPUT_DIRECTORY: outputDirectory, EXPERIMENT_RUN_ID: process.env.EXPERIMENT_RUN_ID || path.basename(outputDirectory) } });
         child.on("exit", (code, signal) => console.log(`${approach} client ${clientIndex} exited (${code ?? signal ?? "unknown"}).`));
         children.push(child);
     }

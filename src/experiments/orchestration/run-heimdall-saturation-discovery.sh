@@ -11,7 +11,12 @@ for ((rep=1; rep<=repetitions; rep++)); do
   modes=(same-query distinct-query); (( rep % 2 == 0 )) && modes=(distinct-query same-query)
   for mode in "${modes[@]}"; do for count in "${count_values[@]}"; do
     if [[ "$action" == "--dry-run" ]]; then printf '%s,%s,%s,%s\n' "$rep" "$mode" "$count" "$duration"; else
-      SATURATION_DURATION_SECONDS="$duration" SATURATION_REPETITION="$rep" "$root/src/experiments/orchestration/run-heimdall-saturation-experiment.sh" "$mode" "$count" "$action" || true
+      set +e
+      SATURATION_DURATION_SECONDS="$duration" SATURATION_REPETITION="$rep" "$root/src/experiments/orchestration/run-heimdall-saturation-experiment.sh" "$mode" "$count" "$action"
+      status=$?
+      set -e
+      # A cleanup failure means the next count would not be isolated.
+      (( status == 70 )) && exit "$status"
     fi
   done; done
 done

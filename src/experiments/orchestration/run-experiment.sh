@@ -62,13 +62,26 @@ solid_initialize="cd \"$evaluation_path\" && EXPERIMENT_CONFIG_PATH=$(shell_quot
 client_pid_file="$evaluation_path/.4hz-$approach-launcher.pid"
 client_phase_a_pid_file="$evaluation_path/.4hz-$approach-phase-a-launcher.pid"
 client_phase_b_pid_file="$evaluation_path/.4hz-$approach-phase-b-launcher.pid"
+saturation_client_state_dir="$evaluation_path/.evaluation-runtime/saturation-client-attempts"
+saturation_lifecycle_script="$evaluation_path/src/experiments/orchestration/saturation-client-lifecycle.sh"
+saturation_attempt_id=""
+saturation_client_marker=""
+saturation_lifecycle_command() {
+  local lifecycle_action="$1"; shift
+  printf 'bash %s %s --checkout %s --state-dir %s' "$(remote_path_expression "$saturation_lifecycle_script")" "$lifecycle_action" "$(remote_path_expression "$evaluation_path")" "$(remote_path_expression "$saturation_client_state_dir")"
+  while (( $# )); do
+    case "$1" in --marker|--output) printf ' %s %s' "$1" "$(remote_path_expression "$2")" ;; *) printf ' %s %s' "$1" "$(shell_quote "$2")" ;; esac
+    shift 2
+  done
+}
 client_launch_command() {
   local iteration_output_dir="$1" iteration_run_id="$2" client_ids="${3:-}" pid_file="${4:-$client_pid_file}" launch_marker="${5:-}" skip_host_monitor="${6:-false}" launcher_log="${7:-client-launcher.log}"
   local client_args="--output-dir $(shell_quote "$iteration_output_dir")"
   [[ -n "$client_ids" ]] && client_args+=" --client-ids $(shell_quote "$client_ids")"
   [[ -n "$launch_marker" ]] && client_args+=" --launch-marker $(shell_quote "$launch_marker")"
   [[ "$skip_host_monitor" == "true" ]] && client_args+=" --skip-host-monitor"
-  printf 'cd "%s" && (setsid env RSP_JS_DISABLE_LOGGING=1 EXPERIMENT_CONFIG_PATH=%s EXPERIMENT_CONFIG_OVERRIDES=%s EXPERIMENT_RUN_ID=%s EVALUATION_REPOSITORY_SHA=%s RSP_JS_REPOSITORY_SHA=%s SERVICE_REPOSITORY_SHA=%s npx ts-node %s %s > "%s/%s" 2>&1 & client_pid=$!; printf '\''%%s\\n'\'' "$client_pid" > "%s"; wait "$client_pid")' \
+  if [[ -n "$saturation_mode" ]]; then client_args+=" --saturation-attempt-id=$(shell_quote "$saturation_attempt_id") --saturation-evaluation-checkout=$(shell_quote "$evaluation_path")"; fi
+  printf 'cd "%s" && (setsid env RSP_JS_DISABLE_LOGGING=1 EXPERIMENT_CONFIG_PATH=%s EXPERIMENT_CONFIG_OVERRIDES=%s EXPERIMENT_RUN_ID=%s EVALUATION_REPOSITORY_SHA=%s RSP_JS_REPOSITORY_SHA=%s SERVICE_REPOSITORY_SHA=%s npx ts-node %s %s > "%s/%s" 2>&1 & client_pid=$!; client_pgid=$(ps -o pgid= -p "$client_pid" | tr -d " "); test "$client_pgid" = "$client_pid" || { echo "client launcher did not become its own process group" >&2; exit 1; }; printf '\''%%s\\n'\'' "$client_pgid" > "%s"; wait "$client_pid")' \
     "$evaluation_path" "$(shell_quote "$client_config_path")" "$(shell_quote "$config_overrides")" "$(shell_quote "$iteration_run_id")" \
     "$(shell_quote "$evaluation_sha")" "$(shell_quote "$rsp_js_sha")" "$(shell_quote "$service_sha")" "$(shell_quote "$launcher")" "$client_args" "$iteration_output_dir" "$launcher_log" "$pid_file"
 }
@@ -304,7 +317,12 @@ if [[ "$mode" == "--preflight" ]]; then
 fi
 for command in "$solid_initialize" "$solid_cleanup" "$replayer_start" "$service_start"; do if command_required "$command"; then echo "Set ${command#<} before running." >&2; exit 2; fi; done
 cleanup() {
-  if [[ "$client_arrival_mode" == "staged-reuse" ]]; then
+  if [[ -n "$saturation_mode" ]]; then
+    if ! experiment_ssh "$client_host" "$(saturation_lifecycle_command cleanup --attempt-id "$saturation_attempt_id" --marker "$saturation_client_marker")"; then return 1; fi
+    if [[ -n "${saturation_iteration_dir:-}" ]]; then
+      experiment_ssh "$client_host" "$(saturation_lifecycle_command snapshot --output "$evaluation_path/$saturation_iteration_dir/client-host-after.txt")" || return 1
+    fi
+  elif [[ "$client_arrival_mode" == "staged-reuse" ]]; then
     experiment_ssh "$client_host" "for pid_file in \"$client_phase_a_pid_file\" \"$client_phase_b_pid_file\"; do if test -f \"\$pid_file\"; then pid=\$(cat \"\$pid_file\" 2>/dev/null || true); if test -n \"\$pid\" && kill -0 -- \"-\$pid\" 2>/dev/null; then kill -TERM -- \"-\$pid\" 2>/dev/null || kill -TERM \"\$pid\" 2>/dev/null || true; for attempt in 1 2 3 4 5; do kill -0 -- \"-\$pid\" 2>/dev/null || break; sleep 1; done; kill -KILL -- \"-\$pid\" 2>/dev/null || true; fi; rm -f \"\$pid_file\"; fi; done" || true
   elif [[ "$approach" == "without-aggregator" ]]; then
     experiment_ssh "$client_host" "if test -f \"$client_pid_file\"; then pid=\$(cat \"$client_pid_file\" 2>/dev/null || true); if test -n \"\$pid\" && kill -0 -- \"-\$pid\" 2>/dev/null; then kill -TERM -- \"-\$pid\" 2>/dev/null || kill -TERM \"\$pid\" 2>/dev/null || true; for attempt in 1 2 3 4 5; do status=\$(kill -0 -- \"-\$pid\" 2>/dev/null && echo alive || true); if test -z \"\$status\"; then break; fi; sleep 1; done; status=\$(kill -0 -- \"-\$pid\" 2>/dev/null && echo alive || true); if test -n \"\$status\"; then kill -KILL -- \"-\$pid\" 2>/dev/null || kill -KILL \"\$pid\" 2>/dev/null || true; fi; fi; rm -f \"$client_pid_file\"; fi" || true
@@ -319,9 +337,23 @@ cleanup() {
   fi
   stop_replayer_process_group
 }
-trap cleanup EXIT INT TERM
+if [[ -n "$saturation_mode" ]]; then
+  trap 'exit 130' INT
+  trap 'exit 143' TERM
+  trap 'saturation_exit_status=$?; trap - EXIT INT TERM; cleanup || exit 70; exit "$saturation_exit_status"' EXIT
+else
+  trap cleanup EXIT INT TERM
+fi
 for iteration in $(seq 1 "$iterations"); do
   iteration_dir="$output_root/iteration-$(printf '%02d' "$iteration")"
+  saturation_iteration_dir="$iteration_dir"
+  if [[ -n "$saturation_mode" ]]; then
+    saturation_attempt_id="$run_id-iteration-$(printf '%02d' "$iteration")"
+    saturation_client_marker="$saturation_client_state_dir/$saturation_attempt_id.pgid"
+    client_pid_file="$saturation_client_marker"
+    experiment_ssh "$client_host" "$(saturation_lifecycle_command snapshot --output "$evaluation_path/$iteration_dir/client-host-before.txt")"
+    experiment_ssh "$client_host" "$(saturation_lifecycle_command preflight)"
+  fi
   service_iteration_dir="$service_results_root/iteration-$(printf '%02d' "$iteration")"
   heimdall_launch_command="mkdir -p \"$service_results_root\" \"$service_iteration_dir\" || exit 1; setsid bash -c $heimdall_start_quoted > \"$service_iteration_dir/heimdall.log\" 2>&1 & heimdall_pid=\$!; printf '%s\\n' \"\$heimdall_pid\" > \"$heimdall_pid_file\"; wait \"\$heimdall_pid\""
   mkdir -p "$root/$iteration_dir"
@@ -387,7 +419,7 @@ for iteration in $(seq 1 "$iterations"); do
   capture_network_snapshots end "iteration-$(printf '%02d' "$iteration")"
   stop_replayer_process_group
   kill "$replayer_pid" 2>/dev/null || true; wait "$replayer_pid" 2>/dev/null || true
-  cleanup
+  if [[ -n "$saturation_mode" ]]; then cleanup || exit 70; else cleanup; fi
   if [[ -n "$service_monitor_pid" ]] && ! wait "$service_monitor_pid"; then echo "Service resource monitor failed." >&2; infrastructure_failed=true; fi
   pids=("$client_pid" "$client_phase_b_ssh_pid"); if [[ -n "$service_pid" ]]; then pids+=("$service_pid"); fi
   kill "${pids[@]}" 2>/dev/null || true; wait "${pids[@]}" 2>/dev/null || true
