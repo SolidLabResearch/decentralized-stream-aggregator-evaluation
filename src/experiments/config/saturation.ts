@@ -9,6 +9,47 @@ export type SaturationQuery = {
     computationalEquivalence: "same-streams-data-windows-bgp-projection-and-expected-cardinality";
 };
 
+/** E4's terminology deliberately describes identity/reuse, not query semantics. */
+export type E4WorkloadMode = "maximum-reuse" | "no-reuse";
+export type E4Classification = "HEALTHY" | "SATURATING" | "SAFETY_STOP" | "INVALID";
+export type E4BoundaryOwner = "HEIMDALL" | "LOAD_GENERATOR" | "SOLID" | "REPLAYER" | "NETWORK" | "UNKNOWN" | null;
+export type E4WatchdogSample = { hostRole: "client" | "heimdall" | "solid" | "replayer"; metric: string; value?: number; threshold?: number; state?: "ok" | "violating" | "metric_unavailable" };
+
+export const E4_DEFAULTS = {
+    watchdogIntervalSeconds: 1, cpuPercent: 90, cpuConsecutiveSamples: 5,
+    minimumAvailableMemoryPercent: 20, fdPercent: 75, applicationFailurePercent: 5,
+    processCountMargin: 4, terminationGraceSeconds: 5,
+} as const;
+
+export function e4ExpectedInvariants(mode: E4WorkloadMode, clientCount: number): { registrations: number; queryCreated: number; queryReused: number; streamSubscriptions: number } {
+    if (!Number.isInteger(clientCount) || clientCount < 1) throw new Error("E4 client count must be a positive integer.");
+    return mode === "maximum-reuse"
+        ? { registrations: clientCount, queryCreated: 1, queryReused: clientCount - 1, streamSubscriptions: 3 }
+        : { registrations: clientCount, queryCreated: clientCount, queryReused: 0, streamSubscriptions: 3 * clientCount };
+}
+
+export function e4QueryMode(mode: E4WorkloadMode): SaturationMode { return mode === "maximum-reuse" ? "same-query" : "distinct-query"; }
+
+export function e4NextN(lastHealthy: number, proposed: number): number {
+    if (!Number.isInteger(lastHealthy) || lastHealthy < 1 || !Number.isInteger(proposed) || proposed < 1) throw new Error("E4 counts must be positive integers.");
+    if (proposed > Math.floor(lastHealthy * 1.5)) throw new Error(`E4 next N ${proposed} exceeds 1.5x last healthy N ${lastHealthy}.`);
+    return proposed;
+}
+
+export function e4BoundaryOwner(samples: E4WatchdogSample[]): E4BoundaryOwner {
+    const violating = samples.filter(sample => sample.state === "violating");
+    if (!violating.length) return null;
+    if (violating.some(sample => sample.hostRole === "client")) return "LOAD_GENERATOR";
+    if (violating.some(sample => sample.hostRole === "heimdall")) return "HEIMDALL";
+    if (violating.some(sample => sample.hostRole === "solid")) return "SOLID";
+    if (violating.some(sample => sample.hostRole === "replayer")) return "REPLAYER";
+    return "UNKNOWN";
+}
+
+export function e4SustainedCpuStop(values: number[], threshold = E4_DEFAULTS.cpuPercent, consecutive = E4_DEFAULTS.cpuConsecutiveSamples): boolean {
+    let run = 0; for (const value of values) { run = value >= threshold ? run + 1 : 0; if (run >= consecutive) return true; } return false;
+}
+
 // This is the exact identity derivation in solid-stream-aggregator/src/utils/Util.ts.
 export function heimdallReuseIdentity(query: string): string { return crypto.createHash("md5").update(query.replace(/\s/g, "")).digest("hex"); }
 export function saturationWindowName(clientIndex: number): string { return `:satw${String(clientIndex).padStart(4, "0")}`; }

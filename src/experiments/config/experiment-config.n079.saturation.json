@@ -1,0 +1,8 @@
+{
+  "experiment": { "frequencyHz": 4, "clientCount": 2, "iterations": 1, "durationSeconds": 120, "resourceSamplingIntervalMs": 1000, "clientArrivalMode": "simultaneous", "saturationMode": "same-query", "saturationMaxClientCount": 4096 },
+  "ssh": { "user": "REPLACE_ME", "bastion": null, "identityFile": null, "connectTimeoutSeconds": 10 },
+  "hosts": { "replayer": "REPLACE_ME", "solidPod": "REPLACE_ME", "client": "REPLACE_ME", "heimdall": "REPLACE_ME", "notificationAggregator": "REPLACE_ME" },
+  "remotePaths": { "evaluation": "~/experiments/decentralized-stream-aggregator-evaluation", "heimdall": "~/experiments/heimdall", "notificationAggregator": "~/experiments/solid-notifications-aggregator", "rspJs": "~/experiments/RSP-JS", "replayer": "~/experiments/replayer" },
+  "urls": { "solidPod": "http://REPLACE_ME:3000/pod1/", "heimdall": "ws://REPLACE_ME:8080/", "notificationAggregator": "ws://REPLACE_ME:8085/", "clientCallbackHost": "http://REPLACE_ME" },
+  "streams": { "x": "http://REPLACE_ME/pod1/accelerometer/acc-x/", "y": "http://REPLACE_ME/pod1/accelerometer/acc-y/", "z": "http://REPLACE_ME/pod1/accelerometer/acc-z/" }
+}
