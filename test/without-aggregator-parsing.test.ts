@@ -70,7 +70,7 @@ test("does not leak parser state between successive documents", () => {
 
 test("keeps the direct-subscription query and callback architecture intact", () => {
         const source = fs.readFileSync(path.resolve(__dirname, "../src/experiments/clients/without-aggregator/client.ts"), "utf8");
-        assert.match(source, /buildActivityIndexQuery\(config\.streams\)/);
+        assert.match(source, /buildActivityIndexQuery\(resolveStreams\(config\), \{ workloadMode: workloadMode\(config\), workloadInstance: workloadInstance\(config\) \}\)/);
         assert.match(source, /axios\.get\(streamName\)/);
         assert.match(source, /axios\.post\(subscriptionServer/);
         assert.match(source, /clientCallbackHost/);

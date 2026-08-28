@@ -16,7 +16,10 @@
     "validate:empirical-scaling": "ts-node src/experiments/validation/multi-client-repetition.ts",
     "analyze:empirical-scaling": "node analysis/empirical-scaling/analyze.js",
     "validate:heterogeneous-workloads": "ts-node src/experiments/validation/heterogeneous-workload.ts",
-    "analyze:heterogeneous-workloads": "node analysis/heterogeneous-workloads/analyze.js"
+    "analyze:heterogeneous-workloads": "node analysis/heterogeneous-workloads/analyze.js",
+    "test:heterogeneous-analyzer": "node test/heterogeneous-analyzer.test.js",
+    "test:heimdall-saturation": "ts-node test/heimdall-saturation.test.ts && ts-node test/e4-saturation.test.ts",
+    "analyze:heimdall-saturation": "node analysis/heimdall-saturation/analyze.js"
   },
   "dependencies": {
     "@inrupt/solid-client-authn-core": "^1.17.5",

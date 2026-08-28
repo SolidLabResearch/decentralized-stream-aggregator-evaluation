@@ -1,5 +1,5 @@
 import { LDESinLDP, LDPCommunication } from "@treecg/versionawareldesinldp";
-import { ExperimentConfig, loadExperimentConfig } from "./src/experiments/config/config";
+import { ExperimentConfig, loadExperimentConfig, resolveStreams } from "./src/experiments/config/config";
 
 export const treePath = "https://saref.etsi.org/core/hasTimestamp";
 
@@ -10,7 +10,8 @@ function loadConfiguredExperimentConfig(): ExperimentConfig {
 }
 
 export function initializationTargets(config: ExperimentConfig = loadConfiguredExperimentConfig()): string[] {
-    return [config.streams.x, config.streams.y, config.streams.z];
+    const streams = resolveStreams(config);
+    return [streams.x, streams.y, streams.z];
 }
 
 export async function initialiseLdes(ldesLocations = initializationTargets()): Promise<void> {
