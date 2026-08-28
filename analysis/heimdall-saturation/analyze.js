@@ -10,7 +10,12 @@ function operationValues(dir, operation) { return fs.readdirSync(dir,{withFileTy
 function resources(dir, file) { return csv(path.join(dir,file)).map(r=>({cpu:r.cpu_utilization_percent, rss:r.rss_bytes||r.rss})); }
 function serviceOps(dir) { return csv(path.join(dir,"service","window-processing.csv")); }
 function firstEventToFirstResult(dir) { const rows=serviceOps(dir); const insertion=numbers(rows.filter(r=>r.operation==="rsp_insertion").map(r=>r.end_monotonic_ns))[0], result=numbers(rows.filter(r=>r.operation==="r2r_first_result").map(r=>r.end_monotonic_ns))[0]; return insertion !== undefined && result !== undefined && result >= insertion ? (result-insertion)/1e6 : undefined; }
-const attempts=csv(path.join(root,"campaign-logs","attempts.csv")); const groups=new Map();
+let attempts=csv(path.join(root,"campaign-logs","attempts.csv"));
+if (!attempts.length) {
+  function findFiles(dir, name) { if (!fs.existsSync(dir)) return []; return fs.readdirSync(dir,{withFileTypes:true}).flatMap(e=>e.isDirectory()?findFiles(path.join(dir,e.name),name):e.name===name?[path.join(dir,e.name)]:[]); }
+  attempts=findFiles(root,"e4-attempt.json").map(file=>{ const attemptDir=path.dirname(file), iterationDir=path.join(attemptDir,"iteration-01"), metadata=JSON.parse(fs.readFileSync(file,"utf8")), classification=fs.existsSync(path.join(attemptDir,"classification.json"))?JSON.parse(fs.readFileSync(path.join(attemptDir,"classification.json"),"utf8")):{}; return {saturation_mode:metadata.workload_mode,client_count:String(metadata.client_count),status:classification.classification==="HEALTHY"?"valid":"invalid",output_root:iterationDir}; });
+}
+const groups=new Map();
 for (const attempt of attempts) { const key=`${attempt.saturation_mode},${attempt.client_count}`; if(!groups.has(key)) groups.set(key,[]); groups.get(key).push(attempt); }
 const summary=[];
 for (const [key, attemptsForCell] of groups) { const first=attemptsForCell[0], dirs=attemptsForCell.map(a=>path.resolve(a.output_root||"")).filter(fs.existsSync); const clientOps=dirs.flatMap(d=>operationValues(d,"registration_to_first_result")); const r2r=dirs.flatMap(d=>operationValues(d,"r2r_first_result")); const firstEvent=dirs.map(firstEventToFirstResult); const service=dirs.flatMap(d=>resources(d,"service-resource.csv")); const client=dirs.flatMap(d=>resources(d,"client-host-resource.csv")); const network=dirs.flatMap(d=>csv(path.join(d,"network.csv"))); const initialization=dirs.flatMap(d=>csv(path.join(d,"service","initialization.csv")));

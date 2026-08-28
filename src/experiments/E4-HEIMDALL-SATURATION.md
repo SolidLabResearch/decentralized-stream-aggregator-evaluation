@@ -1,23 +1,31 @@
-# E4: bounded Heimdall consumer-capacity discovery
+# E4: bounded exploratory no-reuse scaling
 
-E4 measures the safe onset of saturation while increasing simultaneous consumers. A crash is never a result or a criterion: a guardrail crossing stops the current attempt cleanly and prohibits larger automatic N values.
+E1 evaluates increasing client counts for an equivalent query whose Heimdall execution can be shared and reused. E4 is a separate exploratory condition: it increases the number of concurrently executing independent, non-reusable Heimdall query instances.
 
-`maximum-reuse` registers N equivalent queries and must observe N registrations, one created query execution, N-1 reuses, and three upstream subscriptions. `no-reuse` changes only the paired name of the first `WINDOW` declaration and its reference (`:satw0000`, `:satw0001`, ...). Heimdall's equivalence implementation uses that name in its identity comparison. Streams, data, RANGE/STEP, BGP, projection, cardinality and complexity are unchanged, so this is a controlled non-reusable identity—not E3-style query/data heterogeneity. It must observe N registrations/created executions, zero reuses, and 3N upstream subscriptions. Counts are read from Heimdall initialization output; a mismatch is `INVALID`.
+The default E4 sequence is exactly `1,5,12,15,20` clients, one repetition per count, and no-reuse mode only. Each client registers exactly one query. The campaign stops escalation after the first failed, invalid, timed-out, orchestration-failed, or safety-stopped count; it never retries that count and never runs a larger count afterward.
 
-Classifications are `HEALTHY`, `SATURATING`, `SAFETY_STOP`, and `INVALID`. `SATURATING` is application failure (default 5%), registration/first-result failure, timeout, or configured latency threshold while hosts are below hard guards. `SAFETY_STOP` records the sampled host/metric rather than calling Heimdall failed. First client-host guard crossing maps to `LOAD_GENERATOR_LIMIT`; Heimdall maps to `HEIMDALL_SATURATION`; Solid/replayer/network have corresponding owners.
+E4's workload baseline is the observed successful n078 distinct-query n=2/n=8 deployment: Heimdall `e996c2b041c4fbbd206bd3ec8035d7f349cc31eb`, RSP-JS `56e773d8416f978d82a8288802532cabdf8ffef6`, and replayer `a1a2100ea64870da086ec64be1914141eca0fb93`. Historical evaluation checkout `b9052d6a7e1198978826c5fcd2f83d03d4e69799` is provenance only; E4 instead uses the immutable commit containing this modern orchestration. `EVALUATION_REPOSITORY_SHA_EXPECTED` must name that new E4 commit.
 
-Defaults: one-second sampling; available memory at least 20% (immediate stop); 90% process CPU for five consecutive samples; FD use below 75% of a discovered limit; and a configurable current-attempt process-count margin of four. Missing metrics are emitted as `metric_unavailable`, never zero. Each role watchdog writes `watchdog.csv`, atomically creates a trigger, stops further launch, and cleanup uses only recorded `setsid` PID/PGIDs: TERM, five-second grace, then KILL surviving exact groups. No `pkill`/`killall` or command-name cleanup is permitted.
+The controlled no-reuse query changes only the paired name of the first `WINDOW` declaration and its reference (`:satw0000`, `:satw0001`, ...). Heimdall's current equivalence implementation uses that identity comparison to prevent reuse. Streams, data, RANGE/STEP, BGP, projection, arithmetic, expected cardinality, and computational structure remain matched. Therefore E4 isolates execution multiplicity and is not claimed to represent arbitrary heterogeneous-query complexity.
 
-Every attempt has metadata/classification/watchdog/PID-PGID data plus the existing initialization, window, client, service, resource and network artifacts. Strict pre/post gates check stale E4 groups and marker files, ports, SHAs, dataset, reachability, writable directories and metric collection. Any pre/post, cleanup, semantic, backup or infrastructure failure stops the campaign. A configured `E4_BACKUP_COMMAND` receives `E4_ATTEMPT_DIR`; failure stops before a larger N. It must not use `rsync --delete`.
+Before an attempt is healthy, its raw Heimdall initialization must show N registrations, N independent query creations, zero reuse events, and 3N stream subscriptions. All N readiness markers and all N first-result markers/results are also required. Missing clients are reported explicitly.
 
-Discovery is serialized and defaults to `32,64,96,128,...`; a next value over 1.5× the last healthy value is refused. It stops on its first non-healthy result. Confirmation accepts only user-provided N values and repetitions; it never auto-bisects an unsafe boundary.
+The existing `saturation-watchdog.sh` runs on the Heimdall, client, Solid/CSS, and replayer hosts. It records raw samples and creates an attempt-local trigger after configurable consecutive violations. The owning orchestrator terminates the current attempt, invokes the existing bounded process-group cleanup, records `SAFETY_STOP`, and prevents escalation.
 
-Commands (set real n079 values and lifecycle commands first):
+Every repetition preserves the established registration-before-replay sequence and exact-PGID cleanup. The generated campaign CSV has one row per no-reuse count/repetition with initialization counts, clients receiving results, mean client latency, service CPU/RSS, service RX/TX, result count, and failures.
+
+Commands (set the private deployment config and lifecycle commands first):
 
 ```bash
 src/experiments/orchestration/run-saturation-campaign.sh --dry-run
 src/experiments/orchestration/run-saturation-campaign.sh --preflight
-src/experiments/orchestration/run-saturation-campaign.sh --smoke
-src/experiments/orchestration/run-saturation-campaign.sh --discover
-src/experiments/orchestration/run-saturation-campaign.sh --confirm 48,64 3
+src/experiments/orchestration/run-saturation-campaign.sh --run
 ```
+
+`E4_CLIENT_COUNTS` and `E4_REPETITIONS` remain supported overrides, but counts are bounded to 20 by the exploratory campaign wrapper. `E4_PROCESS_CPU_PERCENT` (default `95`) is an observation marker only: high Heimdall, client, Solid, or replayer CPU never triggers a safety stop. Machine-safety overrides include `E4_WATCHDOG_INTERVAL_SECONDS` (default `1`), `E4_WATCHDOG_CONSECUTIVE_SAMPLES` (default `3`), `E4_MAX_LOAD_PER_CPU` (default `2`), `E4_MIN_AVAILABLE_MEMORY_PERCENT` (default `20`), `E4_MAX_SWAP_USED_PERCENT` (default `10`), `E4_WATCHDOG_STARTUP_GRACE_SECONDS` (default `30`), `E4_SSH_CONSECUTIVE_FAILURES` (default `3`), and `E4_HEALTH_TIMEOUT_SECONDS` (default `5`). Load safety is based on `load1 / logical_cpu_count`, not an absolute load value; transient violations must persist for the consecutive-sample threshold.
+
+`E4_CONFIG_PATH` is the local private configuration read by the campaign launcher. `EXPERIMENT_CLIENT_CONFIG_PATH` is a distinct path on `n078-19`, consumed by both `initialise-LDES.ts` and the client launcher through `EXPERIMENT_CONFIG_PATH`; it must point to the separately deployed `distinct-query` JSON. These paths must never be set to the same literal path unless the launcher itself runs on the client host.
+
+E4 cleanup is CSS-level and idempotent: `orchestration/e4-solid-stream-cleanup.sh` recursively removes only `pod1/heterogeneous/segment-01/acc-x/`, `acc-y/`, and `acc-z/`; HTTP 404 means already clean. It deliberately leaves `.internal/notifications`, Redis, CSS profiles/authentication, other pods, and other segments untouched. `orchestration/e4-notification-state.sh` records read-only before/after notification directory snapshots. A changed notification count is observable evidence, not an automatic failure; after n=1 it must be inspected by a human before n=5.
+
+Attempt classifications are `HEALTHY`, `INVALID`, `TIMEOUT`, `SAFETY_STOP`, `PROCESS_FAILURE`, and `ORCHESTRATION_FAILURE`. The machine-readable `classification.json` records status, owner when known (`heimdall`, `client`, `solid`, `replayer`, `network/ssh`, or null), trigger metric/value/threshold, client count, and reason. Campaign summaries read the actual `iteration-01` hierarchy and report configured clients, ready clients, registrations, independent executions, reuse events, successful and missing first results, status, owner, and reason.

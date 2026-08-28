@@ -352,7 +352,7 @@ for iteration in $(seq 1 "$iterations"); do
     saturation_client_marker="$saturation_client_state_dir/$saturation_attempt_id.pgid"
     client_pid_file="$saturation_client_marker"
     experiment_ssh "$client_host" "$(saturation_lifecycle_command snapshot --output "$evaluation_path/$iteration_dir/client-host-before.txt")"
-    experiment_ssh "$client_host" "$(saturation_lifecycle_command preflight)"
+    if [[ "${E4_READ_ONLY_PREFLIGHT:-false}" != true ]]; then experiment_ssh "$client_host" "$(saturation_lifecycle_command preflight)"; else echo "E4 read-only preflight: skipped saturation cleanup preflight."; fi
   fi
   service_iteration_dir="$service_results_root/iteration-$(printf '%02d' "$iteration")"
   heimdall_launch_command="mkdir -p \"$service_results_root\" \"$service_iteration_dir\" || exit 1; setsid bash -c $heimdall_start_quoted > \"$service_iteration_dir/heimdall.log\" 2>&1 & heimdall_pid=\$!; printf '%s\\n' \"\$heimdall_pid\" > \"$heimdall_pid_file\"; wait \"\$heimdall_pid\""

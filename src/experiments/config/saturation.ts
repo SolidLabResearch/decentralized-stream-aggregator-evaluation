@@ -11,12 +11,12 @@ export type SaturationQuery = {
 
 /** E4's terminology deliberately describes identity/reuse, not query semantics. */
 export type E4WorkloadMode = "maximum-reuse" | "no-reuse";
-export type E4Classification = "HEALTHY" | "SATURATING" | "SAFETY_STOP" | "INVALID";
+export type E4Classification = "HEALTHY" | "INVALID" | "TIMEOUT" | "SAFETY_STOP" | "PROCESS_FAILURE" | "ORCHESTRATION_FAILURE";
 export type E4BoundaryOwner = "HEIMDALL" | "LOAD_GENERATOR" | "SOLID" | "REPLAYER" | "NETWORK" | "UNKNOWN" | null;
-export type E4WatchdogSample = { hostRole: "client" | "heimdall" | "solid" | "replayer"; metric: string; value?: number; threshold?: number; state?: "ok" | "violating" | "metric_unavailable" };
+export type E4WatchdogSample = { hostRole: "client" | "heimdall" | "solid" | "replayer"; metric: string; value?: number; threshold?: number; state?: "ok" | "observed" | "violating" | "metric_unavailable" };
 
 export const E4_DEFAULTS = {
-    watchdogIntervalSeconds: 1, cpuPercent: 90, cpuConsecutiveSamples: 5,
+    watchdogIntervalSeconds: 1, cpuPercent: 95, maxLoadPerCpu: 2,
     minimumAvailableMemoryPercent: 20, fdPercent: 75, applicationFailurePercent: 5,
     processCountMargin: 4, terminationGraceSeconds: 5,
 } as const;
@@ -44,10 +44,6 @@ export function e4BoundaryOwner(samples: E4WatchdogSample[]): E4BoundaryOwner {
     if (violating.some(sample => sample.hostRole === "solid")) return "SOLID";
     if (violating.some(sample => sample.hostRole === "replayer")) return "REPLAYER";
     return "UNKNOWN";
-}
-
-export function e4SustainedCpuStop(values: number[], threshold = E4_DEFAULTS.cpuPercent, consecutive = E4_DEFAULTS.cpuConsecutiveSamples): boolean {
-    let run = 0; for (const value of values) { run = value >= threshold ? run + 1 : 0; if (run >= consecutive) return true; } return false;
 }
 
 // This is the exact identity derivation in solid-stream-aggregator/src/utils/Util.ts.

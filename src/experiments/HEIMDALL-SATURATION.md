@@ -2,6 +2,8 @@
 
 This is a separate Heimdall-only experiment for the Sensors-paper scalability concern. It reports saturation characteristics of the evaluated deployment, not a universal Heimdall capacity.
 
+The bounded exploratory E4 campaign is implemented by `orchestration/run-saturation-campaign.sh`. It runs no-reuse only at `1,5,12,15,20` clients by default, with one simultaneous query instance per client and one repetition. The older discovery launcher below remains a separate saturation/discovery workflow and is not part of the exploratory E4 campaign.
+
 `same-query` is the maximum-reuse condition: every concurrent client sends byte-identical Qsat0, and Heimdall is expected to maintain one reusable execution.
 
 `distinct-query` is the controlled non-reusable-query-identity condition, not N different semantic analytical tasks. It retains the same streams and data, 60 s range, 20 s step, three windows, BGP, SELECT expression, result shape, expected cardinality, and computational workload structure. Client *i* differs only in a deterministic first window identifier `:satwNNNN`; both the `FROM NAMED WINDOW` declaration and its matching `WINDOW` reference change together, so the graph binding is unchanged. Heimdall consequently maintains N independent executions according to its actual reuse/equivalence implementation.
